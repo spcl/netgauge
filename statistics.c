@@ -58,9 +58,9 @@ void ng_statistics_finish_round(struct ng_statistics *stats) {
                  stats->stats_size,
                  stats->stats_comm
       );
-    if(options->full_output_file) {
+    if(g_options.full_output_file) {
       print_full_results(
-         options->full_output_file,
+         g_options.full_output_file,
  			stats->blockcycles,
  			stats->rttcycles,
  			stats->clock_period,
