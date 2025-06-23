@@ -58,14 +58,17 @@ void ng_statistics_finish_round(struct ng_statistics *stats) {
                  stats->stats_size,
                  stats->stats_comm
       );
-/*    if(options->full_output_file) */
-/*       print_full_results(options->full_output_file, */
-/* 			 blockcycles, */
-/* 			 rttcycles, */
-/* 			 clock_period, */
-/* 			 /\* test_count *\/ test, */
-/* 			 data_size */
-/* 	 ); */
+    if(options->full_output_file) {
+      print_full_results(
+         options->full_output_file,
+ 			blockcycles,
+ 			rttcycles,
+ 			clock_period,
+ 			test_count,
+         test,
+ 			data_size
+ 	   );
+    }
    
 }
 
