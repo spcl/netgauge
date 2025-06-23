@@ -393,7 +393,7 @@ static void one_one_do_benchmarks(struct ng_module *module) {
 
     /* only a client does the stats stuff */
     //if (!g_options.server)
-	  //  ng_statistics_finish_round(&statistics);
+	  ng_statistics_finish_round(&statistics);
       
   }	/* end outer test loop */
 

@@ -317,8 +317,7 @@ static void one_one_all_do_benchmarks(struct ng_module *module) {
         }
 
         /* only a client does the stats stuff */
-        //if (!g_options.server)
-        //  ng_statistics_finish_round(&statistics);
+        ng_statistics_finish_round(&statistics);
       }	/* end outer test loop */
 
       if (size > 2) MPI_Barrier(MPI_COMM_WORLD);

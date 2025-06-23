@@ -59,6 +59,7 @@ void ng_statistics_finish_round(struct ng_statistics *stats) {
                  stats->stats_comm
       );
     if(g_options.full_output_file) {
+      ng_info(NG_VLEV2, "Writing full output to %s", g_options.full_output_file);
       print_full_results(
          g_options.full_output_file,
  			stats->blockcycles,
@@ -67,6 +68,8 @@ void ng_statistics_finish_round(struct ng_statistics *stats) {
  			stats->test_count,
  			stats->data_size
  	   );
+    } else {
+      ng_info(NG_VLEV2, "No full output file specified, skipping full output");
     }
    
 }
