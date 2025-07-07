@@ -19,7 +19,8 @@ netgauge_SOURCES = mod_eth.c \
 	ptrn_loggp.c \
 	mod_armci.c mod_sci.c ptrn_distrtt.c \
 	mod_cell.c mod_cell_dma.c mod_cell_dmalist.c mod_cell_mail.c  \
-	mod_libof.c ptrn_nbov.c netgauge_cmdline.c \
+	mod_libof.c mod_libfabric.c \
+	ptrn_nbov.c netgauge_cmdline.c \
 	ptrn_noise.c ptrn_noise_cmdline.c ng_sync.c \
 	ptrn_collvsnoise_cmdline.c ptrn_mprobe_cmdline.c ptrn_memory_cmdline.c ptrn_disk_cmdline.c ptrn_ebb_cmdline.c \
 	getopt_long.c rpl_alloc.c ptrn_overlap.c ptrn_overlap_cmdline.c
@@ -29,6 +30,7 @@ netgauge_CPPOBJECTS = ptrn_one_one.o ptrn_one_one_perturb.o ptrn_one_one_sync.o 
 noinst_HEADERS = af_enet.h cpustat.h netgauge.h fullresult.h librecv_dynsize.h \
 	statistics.h mod_inet.h mod_enet.h iba.h iba_openib.h getopt.h llscript.ll \
 	iba_vapi.h mod_cell.h mod_cell_task.h eth_helpers.h mod_ibv.h mod_ib.h \
+	mod_libfabric.h \
 	hrtimer/getres.c hrtimer/sanity-check.c hrtimer/calibrate.h hrtimer/ppc-gcc-tb.h hrtimer/x86_32-gcc-rdtsc.h hrtimer/mpi-wtime.h \
 	hrtimer/x86_64-gcc-rdtsc.h hrtimer/hrtimer.h ng_tools.hpp mersenne/MersenneTwister.h hrtimer/ia64-gcc-itc.h hrtimer/mips64-sicortex-gcc.h \
 	ptrn_noise_cmdline.h ptrn_noise.h netgauge_cmdline.h ptrn_collvsnoise_cmdline.h ng_sync.h ptrn_beff_cmdline.h ptrn_memory_cmdline.h ptrn_disk_cmdline.h \
