@@ -29,11 +29,13 @@ AC_DEFUN([NG_WITH_LIBFABRIC], [
           ])
       ])
       PKG_CHECK_MODULES([LIBFABRIC], [libfabric >= 1.0],
-        [AC_MSG_RESULT([yes])
+        [dnl Action if found
+        AC_MSG_RESULT([yes])
         enable_libfabric=yes
         LIBS="$LIBS $LIBFABRIC_LIBS"
         CFLAGS="$CFLAGS $LIBFABRIC_CFLAGS"],
-        [AC_MSG_RESULT([no])
+        [dnl Action if not found
+        AC_MSG_RESULT([no])
         AS_IF([test "x$with_libfabric_path" != "xauto"], [
            AC_MSG_ERROR([libfabric not found or version too old, but was explicitly requested with --with-libfabric=$with_libfabric_path])
         ], [
