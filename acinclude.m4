@@ -11,4 +11,4 @@ m4_include(config/hrtimer.m4)
 m4_include(config/check_module.m4)
 m4_include(config/check_pattern.m4)
 m4_include(config/cpuaffinity.m4)
-
+m4_include([config/libfabric.m4])

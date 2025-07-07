@@ -132,6 +132,9 @@ NG_WITH_CELL
 # check for "--with-mx"
 NG_WITH_MX
 
+# check for "--with-libfabric"
+NG_WITH_LIBFABRIC
+
 
 AC_MSG_NOTICE([**** checking if Netgauge modules compile ****])
 HTOR_CHECK_MODULE(TCP,mod_tcp.c,NG_MOD_TCP)
@@ -148,7 +151,7 @@ HTOR_CHECK_MODULE(GM,mod_gm.c,NG_MOD_GM)
 HTOR_CHECK_MODULE(SCI,mod_sci.c,NG_MOD_SCI)
 HTOR_CHECK_MODULE(CELL,mod_cell.c,NG_MOD_CELL)
 HTOR_CHECK_MODULE(MX,mod_mx.c,NG_MOD_MX)
-HTOR_CHECK_MODULE(IBV,mod_libfabric.c,NG_MOD_LIBFABRIC)
+HTOR_CHECK_MODULE(LIBFABRIC,mod_libfabric.c,NG_MOD_LIBFABRIC)
 
 AC_MSG_NOTICE([**** checking if Netgauge patterns compile ****])
 HTOR_CHECK_PATTERN(distrtt,ptrn_distrtt.c,NG_PTRN_DISTRTT)

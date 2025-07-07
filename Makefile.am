@@ -10,7 +10,6 @@ CCLD=$(CXX) $(CXXFLAGS)
 %.o: %.cpp *h hrtimer/*
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-
 netgauge_SOURCES = mod_eth.c \
 	mod_ib.c mod_ibv.c mod_mpi.c mod_dummy.c netgauge.c fullresult.c \
 	cpustat.c statistics.c \
