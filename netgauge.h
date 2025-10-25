@@ -446,6 +446,7 @@ int register_pattern_nbov();
 int register_pattern_esp_params();
 int register_pattern_synctest();
 int register_pattern_cpu();
+int register_pattern_goal();                                
 int ng_register_pattern(struct ng_comm_pattern *pattern);
 int ng_send_all(int dst, void *buffer, int size, const struct ng_module *module);
 int ng_recv_all(int src, void *buffer, int size, const struct ng_module *module);

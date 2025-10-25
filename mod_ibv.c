@@ -45,7 +45,7 @@ static struct ng_module ibv_module = {
 static int 
 ibv_getopt(int argc, char **argv, struct ng_options *global_opts) {
    int c;
-   char *optchars = "T:M:";
+   char *optchars = "-T:M:";
    extern char *optarg;
    extern int optind, opterr, optopt;
 
@@ -67,8 +67,10 @@ ibv_getopt(int argc, char **argv, struct ng_options *global_opts) {
 
    /* parsing the options and set some parameters */
    while ((c = getopt(argc, argv, optchars)) >= 0) {
+      ng_info(NG_VLEV2, "Processing option '-%c' with argument '%s'", c, optarg ? optarg : "NULL");
       switch (c) {
       case '?': /* unrecognized or badly used option */
+         continue;
          if (!strchr(optchars, optopt))
             continue; /* unrecognized */
          ng_error("ibv: option %c requires an argument", optopt);
@@ -128,6 +130,7 @@ ibv_getopt(int argc, char **argv, struct ng_options *global_opts) {
          } /* -M switch */
          break; /* case 'M' */
       default:
+         continue;
          ng_error("We got an unspecified argument in %s", __func__);
          return 1;
       } /* outer switch */                     

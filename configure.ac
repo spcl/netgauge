@@ -180,6 +180,7 @@ HTOR_CHECK_PATTERN(disk,ptrn_disk.cpp,NG_PTRN_DISK)
 HTOR_CHECK_PATTERN(ebb,ptrn_ebb.cpp,NG_PTRN_EBB)
 HTOR_CHECK_PATTERN(func_args,ptrn_func_args.cpp,NG_PTRN_FUNC_ARGS)
 HTOR_CHECK_PATTERN(cpu,ptrn_cpu.cpp,NG_PTRN_CPU)
+HTOR_CHECK_PATTERN(goal,ptrn_goal.cpp,NG_PTRN_GOAL)
 AC_LANG_POP()
 
 

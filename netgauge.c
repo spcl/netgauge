@@ -177,6 +177,7 @@ int main(int argc, char **argv) {
   register_pattern_ebb();
   register_pattern_func_args();
   register_pattern_cpu();
+  register_pattern_goal();                                
   
   /* ptrnopts and modeopts are just temporary, unfortunately the
   ng_options struct gets initialized by ng_get_options (and I do not want to
