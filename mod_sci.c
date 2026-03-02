@@ -203,15 +203,15 @@ static inline void my_shutdown(struct ng_options *global_opts);
 static inline void my_usage(void);
 
 /* Blocking sends/recv */
-static inline int sendto_via_SCIMemCpy(int dst, void *buffer, int size);
-static inline int sendto_via_SCIMemWrite(int dst, void *buffer, int size);
-static inline int sendto_via_SCITransferBlock(int dst, void *buffer, int size);
-static inline int sendto_via_memcpy(int dst, void *buffer, int size);
-static inline int my_recvfrom(int src, void *buffer, int size);
+static inline int sendto_via_SCIMemCpy(int dst, void *buffer, int size, int tag);
+static inline int sendto_via_SCIMemWrite(int dst, void *buffer, int size, int tag);
+static inline int sendto_via_SCITransferBlock(int dst, void *buffer, int size, int tag);
+static inline int sendto_via_memcpy(int dst, void *buffer, int size, int tag);
+static inline int my_recvfrom(int src, void *buffer, int size, int tag);
 
 /* Non-blocking send/recv */
-static inline int my_isendto(int dst, void *buffer, int size, NG_Request *req);
-static inline int my_irecvfrom(int src, void *buffer, int size, NG_Request *req);
+static inline int my_isendto(int dst, void *buffer, int size, int tag, NG_Request *req);
+static inline int my_irecvfrom(int src, void *buffer, int size, int tag, NG_Request *req);
 
 static inline int test_via_DMA(NG_Request *req);
 static inline int test_via_PIO(NG_Request *req);
@@ -905,7 +905,7 @@ static inline int my_setup_channels (void) {
   return 0;
 }
 
-static inline int sendto_via_SCIMemCpy(int dst, void *buffer, int size) {
+static inline int sendto_via_SCIMemCpy(int dst, void *buffer, int size, int tag) {
   int size_old = size;
   int size_to_send = 0;
   unsigned int alignment_displ, padding;
@@ -1043,7 +1043,7 @@ static inline int sendto_via_SCIMemCpy(int dst, void *buffer, int size) {
   return size_old;
 }
 
-static inline int sendto_via_SCIMemWrite(int dst, void *buffer, int size) {
+static inline int sendto_via_SCIMemWrite(int dst, void *buffer, int size, int tag) {
   int size_old = size;
   int size_to_send = 0;
   unsigned int alignment_displ, padding;
@@ -1173,7 +1173,7 @@ static inline int sendto_via_SCIMemWrite(int dst, void *buffer, int size) {
   return size_old;
 }
 
-static inline int sendto_via_SCITransferBlock(int dst, void *buffer, int size) {
+static inline int sendto_via_SCITransferBlock(int dst, void *buffer, int size, int tag) {
   int size_old = size;
   int size_to_send = 0;
   unsigned int alignment_displ, padding;
@@ -1290,7 +1290,7 @@ static inline int sendto_via_SCITransferBlock(int dst, void *buffer, int size) {
   return size_old;
 }
 
-static inline int sendto_via_memcpy(int dst, void *buffer, int size) {
+static inline int sendto_via_memcpy(int dst, void *buffer, int size, int tag) {
   int size_old = size;
   int size_to_send = 0;
   Queue_element *queue_element_ptr = NULL;
@@ -1384,7 +1384,7 @@ static inline int sendto_via_memcpy(int dst, void *buffer, int size) {
   return size_old;
 }
 
-static inline int my_recvfrom(int src, void *buffer, int size) {
+static inline int my_recvfrom(int src, void *buffer, int size, int tag) {
   int size_old = size;
   int size_to_copy = 0;
   Queue_element *queue_element_ptr = NULL;
@@ -1465,7 +1465,7 @@ static inline int my_recvfrom(int src, void *buffer, int size) {
   return size_old;
 }
 
-static inline int my_isendto(int dst, void *buffer, int size, NG_Request * req) {
+static inline int my_isendto(int dst, void *buffer, int size, int tag, NG_Request * req) {
   int size_to_send = 0;
   unsigned int alignment_displ, padding;
   Queue_element *queue_element_ptr = NULL;
@@ -1587,7 +1587,7 @@ static inline int my_isendto(int dst, void *buffer, int size, NG_Request * req) 
   return 0;
 }
 
-static inline int my_irecvfrom (int src, void *buffer, int size, NG_Request *req) {
+static inline int my_irecvfrom (int src, void *buffer, int size, int tag, NG_Request *req) {
   int size_to_copy = 0;
   Queue_element *queue_element_ptr = NULL;
   Recvq_data_element *data_ptr = NULL;

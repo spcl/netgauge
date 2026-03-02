@@ -21,10 +21,10 @@ static int ng_mx_init(struct ng_options *global_opts);
 static void ng_mx_shutdown(struct ng_options *global_opts);
 void ng_mx_usage(void);
 void ng_mx_writemanpage(void);
-static int ng_mx_sendto(int dst, void *buffer, int size);
-static int ng_mx_recvfrom(int src, void *buffer, int size);
-static int ng_mx_isendto(int dst, void *buffer, int size, NG_Request *req);
-static int ng_mx_irecvfrom(int src, void *buffer, int size, NG_Request *req);
+static int ng_mx_sendto(int dst, void *buffer, int size, int tag);
+static int ng_mx_recvfrom(int src, void *buffer, int size, int tag);
+static int ng_mx_isendto(int dst, void *buffer, int size, int tag, NG_Request *req);
+static int ng_mx_irecvfrom(int src, void *buffer, int size, int tag, NG_Request *req);
 static int ng_mx_test(NG_Request *req);
 
 extern struct ng_options g_options;
@@ -61,7 +61,7 @@ static struct mx_private_data {
 } module_data;
 
 
-static int ng_mx_sendto(int dst, void *buffer, int size) {
+static int ng_mx_sendto(int dst, void *buffer, int size, int tag) {
   
   mx_return_t rc;
   mx_request_t req;
@@ -83,7 +83,7 @@ static int ng_mx_sendto(int dst, void *buffer, int size) {
   return size;
 }
 
-static int ng_mx_isendto(int dst, void *buffer, int size, NG_Request *req) {
+static int ng_mx_isendto(int dst, void *buffer, int size, int tag, NG_Request *req) {
   
   mx_return_t rc;
   mx_segment_t segm_list;
@@ -103,7 +103,7 @@ static int ng_mx_isendto(int dst, void *buffer, int size, NG_Request *req) {
 
 }
 
-static int ng_mx_irecvfrom(int src, void *buffer, int size, NG_Request *req) {
+static int ng_mx_irecvfrom(int src, void *buffer, int size, int tag, NG_Request *req) {
 	
   mx_return_t rc;
   mx_segment_t segm_list;
@@ -145,7 +145,7 @@ static int ng_mx_test(NG_Request *req) {
   return 1;
 }
 
-static int ng_mx_recvfrom(int src, void *buffer, int size) {
+static int ng_mx_recvfrom(int src, void *buffer, int size, int tag) {
 
   mx_return_t rc;
   mx_request_t req;

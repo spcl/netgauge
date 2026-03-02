@@ -50,8 +50,8 @@ static int  gm1_getopt(int argc, char **argv, struct ng_options *global_opts);
 static int  gm1_init(struct ng_options *global_opts);
 static void gm1_shutdown(struct ng_options *global_opts);
 static void gm1_usage(void);
-static int  gm1_sendto(int dst, void *buffer, int size);
-static int  gm1_recvfrom(int src, void *buffer, int size);
+static int  gm1_sendto(int dst, void *buffer, int size, int tag);
+static int  gm1_recvfrom(int src, void *buffer, int size, int tag);
 static void gm1_send_callback(struct gm_port *port, void *the_context, gm_status_t status);
 
 
@@ -258,7 +258,7 @@ end_error:
 
 
 /* send function */
-static int gm1_sendto(int dst, void *buffer, int size)
+static int gm1_sendto(int dst, void *buffer, int size, int tag)
 {
   gm_recv_event_t *gm_event;
   char* send_buffer;
@@ -404,7 +404,7 @@ static void gm1_send_callback(struct gm_port *port, void *the_context, gm_status
 
 
 /* function to receive a message */
-static int gm1_recvfrom(int src, void *buffer, int size)
+static int gm1_recvfrom(int src, void *buffer, int size, int tag)
 {
   gm1_recv_info_t recv_info;
 

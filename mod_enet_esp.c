@@ -43,8 +43,8 @@ static int enet_esp_init(struct ng_options *global_opts);
 static void enet_esp_shutdown(struct ng_options *global_opts);
 static void enet_esp_usage(void);
 static void enet_esp_writemanpage(void);
-static inline int enet_esp_send(int dst, void *buffer, int size);
-static inline int enet_esp_recv(int src, void *buffer, int size);
+static inline int enet_esp_send(int dst, void *buffer, int size, int tag);
+static inline int enet_esp_recv(int src, void *buffer, int size, int tag);
 static int enet_esp_set_blocking(int do_block, int partner);
 static int enet_esp_setup_channels_MPI();
 
@@ -349,7 +349,7 @@ static int enet_esp_set_blocking(int do_block, int partner) {
    return 1;
 }
 
-static int enet_esp_send(int dst, void *buffer, int size) {
+static int enet_esp_send(int dst, void *buffer, int size, int tag) {
    int sent = 0;
    int stop_tests = 0;
    
@@ -382,7 +382,7 @@ static int enet_esp_send(int dst, void *buffer, int size) {
    return sent;
 }
 
-static int enet_esp_recv(int src, void *buffer, int size) {
+static int enet_esp_recv(int src, void *buffer, int size, int tag) {
    int rcvd = 0;
    int stop_tests = 0;
    

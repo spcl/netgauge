@@ -700,7 +700,7 @@ static void libfabric_shutdown(struct ng_options *global_opts) {
     return;
 }
 
-static int libfabric_isendto(int dst, void *buffer, int size, NG_Request *req) {
+static int libfabric_isendto(int dst, void *buffer, int size, int tag, NG_Request *req) {
     VERBOSE_LOG("Sending %d bytes to peer %d\n", size, dst);
 
     libfabric_completion_handle_t *handle = libfabric_get_completion_handle();
@@ -760,7 +760,7 @@ static int libfabric_isendto(int dst, void *buffer, int size, NG_Request *req) {
     return size;
 }
 
-static int libfabric_irecvfrom(int src, void *buffer, int size, NG_Request *req) {
+static int libfabric_irecvfrom(int src, void *buffer, int size, int tag, NG_Request *req) {
     VERBOSE_LOG("Receiving %d bytes from peer %d\n", size, src);
 
     libfabric_completion_handle_t *handle = libfabric_get_completion_handle();
@@ -841,9 +841,9 @@ static int libfabric_test(NG_Request *req) {
     return 0; // Always completed in blocking implementation
 }
 
-static int libfabric_sendto(int dst, void *buffer, int size) {
+static int libfabric_sendto(int dst, void *buffer, int size, int tag) {
     NG_Request req;
-    libfabric_isendto(dst, buffer, size, &req);
+    libfabric_isendto(dst, buffer, size, tag, &req);
     
     // Wait for completion
     while (libfabric_test(&req) != 0) {
@@ -853,9 +853,9 @@ static int libfabric_sendto(int dst, void *buffer, int size) {
     return size;
 }
 
-static int libfabric_recvfrom(int src, void *buffer, int size) {
+static int libfabric_recvfrom(int src, void *buffer, int size, int tag) {
     NG_Request req;
-    libfabric_irecvfrom(src, buffer, size, &req);
+    libfabric_irecvfrom(src, buffer, size, tag, &req);
     
     // Wait for completion
     while (libfabric_test(&req) != 0) {

@@ -25,10 +25,10 @@ static int  armci_server(void *buffer, int size);
 static int  armci_client(void *buffer, int size, unsigned long long *blockcycle, unsigned long long *rttcycle);
 static void armci_shutdown(struct ng_options *global_opts);
 void armci_usage(void);
-static int armci_sendto(int dst, void *buffer, int size);
-static int armci_recvfrom(int src, void *buffer, int size);
-static int armci_isendto(int dst, void *buffer, int size, NG_Request *req);
-static int armci_irecvfrom(int src, void *buffer, int size, NG_Request *req);
+static int armci_sendto(int dst, void *buffer, int size, int tag);
+static int armci_recvfrom(int src, void *buffer, int size, int tag);
+static int armci_isendto(int dst, void *buffer, int size, int tag, NG_Request *req);
+static int armci_irecvfrom(int src, void *buffer, int size, int tag, NG_Request *req);
 static int armci_test(NG_Request *req);
 static void* armci_malloc(size_t size);
 
@@ -112,7 +112,7 @@ static void* armci_malloc(size_t size) {
   
 }
 
-static int armci_sendto(int dst, void *buffer, int size) {
+static int armci_sendto(int dst, void *buffer, int size, int tag) {
   int ret;
   
   /* ok, we need a specific buffer address fo every destination ... so
@@ -131,7 +131,7 @@ static int armci_sendto(int dst, void *buffer, int size) {
   return size;
 }
 
-static int armci_recvfrom(int src, void *buffer, int size) {
+static int armci_recvfrom(int src, void *buffer, int size, int tag) {
 
   recvnums[src]++;
   if(recvnums[src] == ULONG_MAX) ng_error("we hit the upper bound on unsigned long - too many messages\n");
@@ -142,7 +142,7 @@ static int armci_recvfrom(int src, void *buffer, int size) {
   return size;
 }
 
-static int armci_isendto(int dst, void *buffer, int size, NG_Request *req) {
+static int armci_isendto(int dst, void *buffer, int size, int tag, NG_Request *req) {
   /*
   MPI_Request *mpireq;
   
@@ -155,7 +155,7 @@ static int armci_isendto(int dst, void *buffer, int size, NG_Request *req) {
   return size;
 }
 
-static int armci_irecvfrom(int src, void *buffer, int size, NG_Request *req) {
+static int armci_irecvfrom(int src, void *buffer, int size, int tag, NG_Request *req) {
   /*MPI_Request *mpireq;
   
   mpireq = malloc(sizeof(MPI_Request));

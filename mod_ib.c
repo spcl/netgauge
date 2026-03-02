@@ -64,7 +64,7 @@ int register_ib(void) {
   return 0;
 }
 
-static int ib_sendto(int dst, void *buffer, int size) {
+static int ib_sendto(int dst, void *buffer, int size, int tag) {
 
 //int temp; //REMOVE THIS
   int                    retval;
@@ -133,7 +133,7 @@ static int ib_sendto(int dst, void *buffer, int size) {
   return size;
 }
 
-static int ib_recvfrom(int src, void* buffer, int size) {
+static int ib_recvfrom(int src, void* buffer, int size, int tag) {
 
   int                   retval, iter_cnt;
   struct ibv_recv_wr    *recv_wr, *bad_wr;
@@ -195,13 +195,13 @@ static int ib_recvfrom(int src, void* buffer, int size) {
   return size;
 }
 
-int ib_isendto(int dst, void *buffer, int size, NG_Request *req) {
+int ib_isendto(int dst, void *buffer, int size, int tag, NG_Request *req) {
 
   ng_abort("the function ib_isendto is currently not implemented\n");
   return -1;
 }
 
-int ib_irecvfrom(int src, void *buffer, int size, NG_Request *req) {
+int ib_irecvfrom(int src, void *buffer, int size, int tag, NG_Request *req) {
 
   ng_abort("the function ib_irecvfrom is currently not implemented\n");
   return -1;

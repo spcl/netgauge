@@ -87,15 +87,15 @@ void fnbov_do_benchmarks(struct ng_module *module) {
 #define NG_WARMUP test_count
     for (test_num=0; test_num < NG_WARMUP; test_num++) {
       if (g_options.mpi_opts->worldrank == 0) {
-        module->isendto(1, buffer, data_size, &reqs[0]);
+        module->isendto(1, buffer, data_size, 0, &reqs[0]);
         while(0 != module->test(&reqs[0]));
-        module->irecvfrom(1, buffer, data_size, &reqs[1]);
+        module->irecvfrom(1, buffer, data_size, 0, &reqs[1]);
         while(0 != module->test(&reqs[1]));
       } else {
         /* act as packet mirror */
-        module->irecvfrom(0, buffer, data_size, &reqs[1]);
+        module->irecvfrom(0, buffer, data_size, 0, &reqs[1]);
         while(0 != module->test(&reqs[1]));
-        module->isendto(0, buffer, data_size, &reqs[0]);
+        module->isendto(0, buffer, data_size, 0, &reqs[0]);
         while(0 != module->test(&reqs[0]));
       }
     }
@@ -115,11 +115,11 @@ void fnbov_do_benchmarks(struct ng_module *module) {
           int sctr=1, rctr=1;
 
           HRT_GET_TIMESTAMP(t[0]);
-          module->isendto(1, buffer, data_size, &reqs[0]);
+          module->isendto(1, buffer, data_size, 0, &reqs[0]);
           HRT_GET_TIMESTAMP(t[1]);
           while(0 != module->test(&reqs[0])) { sctr++; /*wait(time);*/ }
           HRT_GET_TIMESTAMP(t[2]);
-          module->irecvfrom(1, buffer, data_size, &reqs[1]);
+          module->irecvfrom(1, buffer, data_size, 0, &reqs[1]);
           HRT_GET_TIMESTAMP(t[3]);
           while(0 != module->test(&reqs[1])) { rctr++; /*wait(time);*/ }
           HRT_GET_TIMESTAMP(t[4]);
@@ -137,9 +137,9 @@ void fnbov_do_benchmarks(struct ng_module *module) {
           
         } else {
           /* act as packet mirror */
-          module->irecvfrom(0, buffer, data_size, &reqs[1]);
+          module->irecvfrom(0, buffer, data_size, 0, &reqs[1]);
           while(0 != module->test(&reqs[1]));
-          module->isendto(0, buffer, data_size, &reqs[0]);
+          module->isendto(0, buffer, data_size, 0, &reqs[0]);
           while(0 != module->test(&reqs[0]));
         }
       }

@@ -22,13 +22,13 @@ static int  ibv_getopt(int argc, char **argv, struct ng_options *global_opts);
 static int  ibv_init(struct ng_options *global_opts);
 static void ibv_shutdown(struct ng_options *global_opts);
 static int  ibv_setup_channels(void);
-static int  ibv_sendto(int dst, void *buffer, int size);
-static int  ibv_recvfrom(int src, void *buffer, int size);
+static int  ibv_sendto(int dst, void *buffer, int size, int tag);
+static int  ibv_recvfrom(int src, void *buffer, int size, int tag);
 static int  ibv_select(int count, int *clients, unsigned long timeout);
 static void ibv_usage(void);
 static void ibv_writemanpage(void);
-static int  ibv_isendto(int dst, void *buffer, int size, NG_Request *req);
-static int  ibv_irecvfrom(int src, void *buffer, int size, NG_Request *req);
+static int  ibv_isendto(int dst, void *buffer, int size, int tag, NG_Request *req);
+static int  ibv_irecvfrom(int src, void *buffer, int size, int tag, NG_Request *req);
 static int  ibv_test(NG_Request *req);
 
 static struct ibv_private_data {

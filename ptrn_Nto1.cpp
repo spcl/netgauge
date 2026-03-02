@@ -180,7 +180,7 @@ void Nto1_do_benchmarks(struct ng_module *module) {
       if (g_options.mpi_opts->worldrank == 0) {
         for(i = 1; i<g_options.mpi_opts->worldsize; i++) {
           /* TODO: all receive in one buffer ... is this a problem? */
-          module->irecvfrom(i, buffer, data_size, &reqs[i-1]);
+          module->irecvfrom(i, buffer, data_size, 0, &reqs[i-1]);
         }
         /* loop until all requests done */
         while(1) {
@@ -193,7 +193,7 @@ void Nto1_do_benchmarks(struct ng_module *module) {
           if(ctr == 0) break;
         }
         /* send ack to rank 1 */
-        module->sendto(1, buffer, 1);
+        module->sendto(1, buffer, 1, 0);
 
         /* receive measurement data from rank 1 */
         MPI_Recv(&results, 2, MPI_DOUBLE, 1, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
@@ -213,14 +213,14 @@ void Nto1_do_benchmarks(struct ng_module *module) {
           HRT_GET_TIMESTAMP(t[0]);
         }
             
-        module->sendto(0, buffer, data_size);
+        module->sendto(0, buffer, data_size, 0);
 
         /* get after-sending time */
         if(g_options.mpi_opts->worldrank == 1) HRT_GET_TIMESTAMP(t[1]);
         
         /* rank 1 receives ack from server */
         if(g_options.mpi_opts->worldrank == 1) {
-          module->recvfrom(0,buffer,1);
+          module->recvfrom(0,buffer,1, 0);
           /* get after-receiving time */
           HRT_GET_TIMESTAMP(t[2]);
 

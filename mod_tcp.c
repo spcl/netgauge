@@ -25,16 +25,16 @@ extern struct ng_options g_options;
 /* function prototypes */
 static int tcp_setup_channels_MPI();
 static int tcp_setup_channels_NOMPI();
-static int tcp_sendto(int dst, void *buffer, int size);
-static int tcp_recvfrom(int src, void *buffer, int size);
+static int tcp_sendto(int dst, void *buffer, int size, int tag);
+static int tcp_recvfrom(int src, void *buffer, int size, int tag);
 static int tcp_set_blocking(int do_block, int partner);
 static int tcp_init(struct ng_options *global_opts);
 static int tcp_getopt(int argc, char **argv, struct ng_options *global_opts);
 static void tcp_writemanpage(void);
 static void tcp_usage(void);
 static void tcp_shutdown(struct ng_options *global_opts);
-static int tcp_isendto(int dst, void *buffer, int size, NG_Request *req);
-static int tcp_irecvfrom(int src, void *buffer, int size, NG_Request *req);
+static int tcp_isendto(int dst, void *buffer, int size, int tag, NG_Request *req);
+static int tcp_irecvfrom(int src, void *buffer, int size, int tag, NG_Request *req);
 static int tcp_test(NG_Request *req);
 static int tcp_send_once(int dst, void *buffer, int size);
 static int tcp_recv_once(int src, void *buffer, int size);
@@ -296,7 +296,7 @@ static int tcp_send_once(int dst, void *buffer, int size) {
    return sent;
 }
 
-static int tcp_sendto(int dst, void *buffer, int size) {
+static int tcp_sendto(int dst, void *buffer, int size, int tag) {
    int sent = 0;
    
   again:
@@ -347,7 +347,7 @@ static int tcp_recv_once(int src, void *buffer, int size) {
    return rcvd;
 }
 
-static int tcp_recvfrom(int src, void *buffer, int size) {
+static int tcp_recvfrom(int src, void *buffer, int size, int tag) {
    int rcvd = 0;
 
   again:
@@ -378,7 +378,7 @@ static int tcp_recvfrom(int src, void *buffer, int size) {
    return rcvd;
 }
 
-int tcp_isendto(int dst, void *buffer, int size, NG_Request *req) {
+int tcp_isendto(int dst, void *buffer, int size, int tag, NG_Request *req) {
    req_handle_t *sreq;
    /* init sending */
    sreq = malloc(sizeof(req_handle_t));
@@ -392,7 +392,7 @@ int tcp_isendto(int dst, void *buffer, int size, NG_Request *req) {
    return tcp_test(req);
 }
 
-int tcp_irecvfrom(int src, void *buffer, int size, NG_Request *req) {
+int tcp_irecvfrom(int src, void *buffer, int size, int tag, NG_Request *req) {
    req_handle_t *rreq;
    /* init receiving */
    rreq = malloc(sizeof(req_handle_t));

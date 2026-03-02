@@ -39,10 +39,10 @@ static void eth_writemanpage(void);
 #ifdef SIOCGIFHWADDR
 
 static int eth_set_blocking(int do_block, int partner);
-static int eth_sendto(int dst, void *buffer, int size);
-static int eth_recvfrom(int src, void *buffer, int size);
-static int eth_isendto(int dst, void *buffer, int size, NG_Request *req);
-static int eth_irecvfrom(int src, void *buffer, int size, NG_Request *req);
+static int eth_sendto(int dst, void *buffer, int size, int tag);
+static int eth_recvfrom(int src, void *buffer, int size, int tag);
+static int eth_isendto(int dst, void *buffer, int size, int tag, NG_Request *req);
+static int eth_irecvfrom(int src, void *buffer, int size, int tag, NG_Request *req);
 static int eth_test(NG_Request *req);
 static int eth_send_once(int dst, void *buffer, int size);
 static int eth_recv_once(int src, void *buffer, int size);
@@ -306,7 +306,7 @@ static int eth_init(struct ng_options *global_opts) {
    return 0;
 }
 
-static int eth_isendto(int dst, void *buffer, int size, NG_Request *req) {
+static int eth_isendto(int dst, void *buffer, int size, int tag, NG_Request *req) {
    req_handle_t *sreq;
    //init sending
    sreq = malloc(sizeof(req_handle_t));
@@ -322,7 +322,7 @@ static int eth_isendto(int dst, void *buffer, int size, NG_Request *req) {
 	 return size-sreq->remaining_bytes;
 }
 
-static int eth_irecvfrom(int src, void *buffer, int size, NG_Request *req) {
+static int eth_irecvfrom(int src, void *buffer, int size, int tag, NG_Request *req) {
    req_handle_t *rreq;
 //init receiving
    rreq = malloc(sizeof(req_handle_t));
@@ -435,7 +435,7 @@ static int eth_recv_once(int src, void *buffer, int size)
 }
 
 
-static int eth_sendto(int dst, void *buffer, int size) {
+static int eth_sendto(int dst, void *buffer, int size, int tag) {
 	 char         *bufptr    = buffer;
    ssize_t      sent       = 0;
    unsigned int sent_total = 0;
@@ -479,7 +479,7 @@ static int eth_sendto(int dst, void *buffer, int size) {
    return sent_total;
 }
 
-static int eth_recvfrom(int src, void *buffer, int size) 
+static int eth_recvfrom(int src, void *buffer, int size, int tag) 
 {
 	 char         *bufptr    = buffer;
    int          rcvd       = 0;

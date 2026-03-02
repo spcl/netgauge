@@ -18,10 +18,10 @@ static int  mpi_init(struct ng_options *global_opts);
 static void mpi_shutdown(struct ng_options *global_opts);
 void mpi_usage(void);
 void mpi_writemanpage(void);
-static int mpi_sendto(int dst, void *buffer, int size);
-static int mpi_recvfrom(int src, void *buffer, int size);
-static int mpi_isendto(int dst, void *buffer, int size, NG_Request *req);
-static int mpi_irecvfrom(int src, void *buffer, int size, NG_Request *req);
+static int mpi_sendto(int dst, void *buffer, int size, int tag);
+static int mpi_recvfrom(int src, void *buffer, int size, int tag);
+static int mpi_isendto(int dst, void *buffer, int size, int tag, NG_Request *req);
+static int mpi_irecvfrom(int src, void *buffer, int size, int tag, NG_Request *req);
 static int mpi_test(NG_Request *req);
 
 extern struct ng_options g_options;
@@ -61,12 +61,12 @@ static struct mpi_private_data {
 } module_data;
 
 
-static int mpi_sendto(int dst, void *buffer, int size) {
+static int mpi_sendto(int dst, void *buffer, int size, int tag) {
   MPI_Send(buffer, size, MPI_BYTE, dst, 0, MPI_COMM_WORLD);
   return size;
 }
 
-static int mpi_isendto(int dst, void *buffer, int size, NG_Request *req) {
+static int mpi_isendto(int dst, void *buffer, int size, int tag, NG_Request *req) {
   MPI_Request *mpireq;
   
   mpireq = malloc(sizeof(MPI_Request));
@@ -78,7 +78,7 @@ static int mpi_isendto(int dst, void *buffer, int size, NG_Request *req) {
   return size;
 }
 
-static int mpi_irecvfrom(int src, void *buffer, int size, NG_Request *req) {
+static int mpi_irecvfrom(int src, void *buffer, int size, int tag, NG_Request *req) {
   MPI_Request *mpireq;
   
   mpireq = malloc(sizeof(MPI_Request));
@@ -110,7 +110,7 @@ static int mpi_test(NG_Request *req) {
   return 1;
 }
 
-static int mpi_recvfrom(int src, void *buffer, int size) {
+static int mpi_recvfrom(int src, void *buffer, int size, int tag) {
   MPI_Recv(buffer, size, MPI_BYTE, src, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
   return size;
 }

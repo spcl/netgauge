@@ -603,7 +603,7 @@ static int ibv_setup_channels(void) {
  
 /* send data of size 'size' to the partner :) */
 static int
-ibv_sendto(int dst, void *buffer, int size) {
+ibv_sendto(int dst, void *buffer, int size, int tag) {
    ng_info(NG_VLEV2, "ibv_sendto: sending %d bytes to peer %d", size, dst);
    
    struct ibv_send_wr *bad_wr;
@@ -662,7 +662,7 @@ ibv_sendto(int dst, void *buffer, int size) {
 }
 
 static int
-ibv_recvfrom(int src, void *buffer, int size) {
+ibv_recvfrom(int src, void *buffer, int size, int tag) {
    ng_info(NG_VLEV2, "ibv_recvfrom: posting recv for %d bytes from peer %d", size, src);
 
    struct ibv_recv_wr *bad_rwr;
@@ -710,7 +710,7 @@ ibv_recvfrom(int src, void *buffer, int size) {
 
 /* send data of size 'size' to the partner :) */
 static int
-ibv_isendto(int dst, void *buffer, int size, NG_Request *req) {
+ibv_isendto(int dst, void *buffer, int size, int tag, NG_Request *req) {
    ng_info(NG_VLEV2, "ibv_isendto: queued isend %d bytes to %d", size, dst);
    
    struct ibv_send_wr *bad_wr;
@@ -759,7 +759,7 @@ ibv_isendto(int dst, void *buffer, int size, NG_Request *req) {
 }
 
 static int
-ibv_irecvfrom(int src, void *buffer, int size, NG_Request *req) {
+ibv_irecvfrom(int src, void *buffer, int size, int tag, NG_Request *req) {
    ng_info(NG_VLEV2, "ibv_irecvfrom: posted irecv %d bytes from %d", size, src);
 
    struct ibv_recv_wr *bad_rwr;

@@ -22,8 +22,8 @@ extern struct ng_options g_options;
 /* function prototypes */
 static int udp_setup_channels_MPI();
 static int udp_setup_channels_NOMPI();
-static int udp_sendto(int dst, void *buffer, int size);
-static int udp_recvfrom(int src, void *buffer, int size);
+static int udp_sendto(int dst, void *buffer, int size, int tag);
+static int udp_recvfrom(int src, void *buffer, int size, int tag);
 static int udp_set_blocking(int do_block, int partner);
 static int udp_init(struct ng_options *global_opts);
 static int udp_getopt(int argc, char **argv, struct ng_options *global_opts);
@@ -32,8 +32,8 @@ static void udp_usage(void);
 static void udp_shutdown(struct ng_options *global_opts);
 static int udp_recv_once(int src, void *buffer, int size);
 static int udp_send_once(int dst, void *buffer, int size);
-static int udp_isendto(int dst, void *buffer, int size, NG_Request *req);
-static int udp_irecvfrom(int src, void *buffer, int size, NG_Request *req);
+static int udp_isendto(int dst, void *buffer, int size, int tag, NG_Request *req);
+static int udp_irecvfrom(int src, void *buffer, int size, int tag, NG_Request *req);
 static int udp_test(NG_Request *req);
 
 /* module registration data structure (udp) */
@@ -291,7 +291,7 @@ static int udp_set_blocking(int do_block, int partner)
 
 
 
-static int udp_isendto(int dst, void *buffer, int size, NG_Request *req)
+static int udp_isendto(int dst, void *buffer, int size, int tag, NG_Request *req)
 {
    req_handle_t *sreq;
    //init sending
@@ -308,7 +308,7 @@ static int udp_isendto(int dst, void *buffer, int size, NG_Request *req)
    return size-sreq->remaining_bytes;
 }
 
-static int udp_irecvfrom(int src, void *buffer, int size, NG_Request *req)
+static int udp_irecvfrom(int src, void *buffer, int size, int tag, NG_Request *req)
 {
    req_handle_t *rreq;
 //init receiving
@@ -421,7 +421,7 @@ int udp_test(NG_Request *req) {
    return ret;
 }
 
-static int udp_sendto(int dst, void *buffer, int size) {
+static int udp_sendto(int dst, void *buffer, int size, int tag) {
    char         *bufptr    = buffer;
    int          sent       = 0;
    unsigned int sent_total = 0;
@@ -465,7 +465,7 @@ static int udp_sendto(int dst, void *buffer, int size) {
    return sent_total;
 }
 
-static int udp_recvfrom(int src, void *buffer, int size)
+static int udp_recvfrom(int src, void *buffer, int size, int tag)
 {
    char *bufptr = buffer;
    int rcvd     = 0;

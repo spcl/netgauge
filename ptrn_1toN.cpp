@@ -180,7 +180,7 @@ void f1toN_do_benchmarks(struct ng_module *module) {
         
         for(i = 1; i<g_options.mpi_opts->worldsize; i++) {
           /* TODO: send from one buffer ... is this a problem? */
-          module->isendto(i, buffer, data_size, &sreqs[i-1]);
+          module->isendto(i, buffer, data_size, 0, &sreqs[i-1]);
         }
         
         HRT_GET_TIMESTAMP(t[1]);
@@ -188,7 +188,7 @@ void f1toN_do_benchmarks(struct ng_module *module) {
         
         for(i = 1; i<g_options.mpi_opts->worldsize; i++) {
           /* TODO: recv to one buffer ... is this a problem? */
-          module->irecvfrom(i, buffer, data_size, &rreqs[i-1]);
+          module->irecvfrom(i, buffer, data_size, 0, &rreqs[i-1]);
         }
         /* loop until all requests done */
         while(1) {
@@ -214,9 +214,9 @@ void f1toN_do_benchmarks(struct ng_module *module) {
           
       } else {
         /* do the ping pong game */
-        module->recvfrom(0, buffer, data_size);
+        module->recvfrom(0, buffer, data_size, 0);
           
-        module->sendto(0, buffer, data_size);
+        module->sendto(0, buffer, data_size, 0);
         
       }
 

@@ -18,8 +18,8 @@
 #include "mod_cell.h"
 
 /** module function prototypes */
-int cell_dma_sendto(int dst, void *buffer, int size);
-int cell_dma_recvfrom(int src, void *buffer, int size);
+int cell_dma_sendto(int dst, void *buffer, int size, int tag);
+int cell_dma_recvfrom(int src, void *buffer, int size, int tag);
 void cell_dma_usage(void);
 int  cell_dma_getopt(int argc, char **argv, struct ng_options *global_opts);
 int  cell_dma_init(struct ng_options *global_opts);
@@ -173,7 +173,7 @@ int cell_dma_setup_channels() {
 
 
 /** module function for sending a single buffer of data */
-int cell_dma_sendto(int dst, void *buffer __attribute__((unused)), int size) {
+int cell_dma_sendto(int dst, void *buffer __attribute__((unused)), int size, int tag) {
    cell_task task;
    int ret;
    uint32_t data;
@@ -210,7 +210,7 @@ int cell_dma_sendto(int dst, void *buffer __attribute__((unused)), int size) {
 
 
 /** module function for receiving a single buffer of data */
-int cell_dma_recvfrom(int src, void *buffer __attribute__((unused)), int size) {
+int cell_dma_recvfrom(int src, void *buffer __attribute__((unused)), int size, int tag) {
    cell_task task;
    int ret;
    uint32_t data;

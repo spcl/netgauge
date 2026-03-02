@@ -331,7 +331,7 @@ struct ng_module {
     * @return the number of bytes sent with the current call,
     *    values < 0 indicate errors
     */
-   int (*sendto)(int dst, void *buffer, int size);
+   int (*sendto)(int dst, void *buffer, int size, int tag);
    
    /**
     * Instructs the comm. module to receive from a peer. Semantics is
@@ -340,7 +340,7 @@ struct ng_module {
     * @return the number of bytes received with the current call,
     *    values < 0 indicate errors
     */
-   int (*recvfrom)(int src, void *buffer, int size);
+   int (*recvfrom)(int src, void *buffer, int size, int tag);
 
    /**
     * Sets the module to use blocking/nonblocking behavior for th
@@ -362,7 +362,7 @@ struct ng_module {
     * @return a request handle that identifies the outstanding message
     *    transfer request   
     */
-   int (*isendto)(int dst, void *buffer, int size, NG_Request *req);
+   int (*isendto)(int dst, void *buffer, int size, int tag, NG_Request *req);
    
    /**
     * Instructs the comm. module to receive from a peer. Semantics is
@@ -373,7 +373,7 @@ struct ng_module {
     * @return a request handle that identifies the outstanding message
     *    transfer request   
     */
-   int (*irecvfrom)(int src, void *buffer, int size, NG_Request *req);
+   int (*irecvfrom)(int src, void *buffer, int size, int tag, NG_Request *req);
    
    /**
     * Tests an outstanding message transfer request for completion.
@@ -475,12 +475,12 @@ void ng_manpage_module(const char, const char *, const char *, const char *);
   int NG_SEND_sent = 0;                 \
   do {                                  \
     int NG_SEND_res;                \
-    NG_SEND_res = module->sendto(dst, (void*)((char*)buf + NG_SEND_sent), size - NG_SEND_sent);    \
+    NG_SEND_res = module->sendto(dst, (void*)((char*)buf + NG_SEND_sent), size - NG_SEND_sent, 0);    \
     if(NG_SEND_res < 0) ng_error("module->sendto returned %i", NG_SEND_res);   \
     NG_SEND_sent += NG_SEND_res;        \
   } while(NG_SEND_sent < size);         \
 }
-                                       
+
 
 /* this macro implements the recv loop until all data is received
  * successfully */
@@ -489,7 +489,7 @@ void ng_manpage_module(const char, const char *, const char *, const char *);
   int NG_RECV_recvd = 0;                 \
   do {                                  \
     int NG_RECV_res;                \
-    NG_RECV_res = module->recvfrom(src, (void*)((char*)buf + NG_RECV_recvd), size - NG_RECV_recvd);    \
+    NG_RECV_res = module->recvfrom(src, (void*)((char*)buf + NG_RECV_recvd), size - NG_RECV_recvd, 0);    \
     if(NG_RECV_res < 0) {               \
       ng_error("module->recvfrom returned %i", NG_RECV_res);   \
       break;                            \
@@ -497,7 +497,6 @@ void ng_manpage_module(const char, const char *, const char *, const char *);
     NG_RECV_recvd += NG_RECV_res;       \
   } while(NG_RECV_recvd < size);        \
 }
-
 
 /* Netgauge Malloc macro - calls the module's malloc or the normal
  * malloc ... */

@@ -77,8 +77,8 @@ void fdistrtt_do_benchmarks(struct ng_module *module) {
 		if (myproc == 0) {
 			usleep(SLEEPTIME); /* wait for some time so that node 2 is in recv*/
 			HRT_GET_TIMESTAMP(t1);
-            module->sendto(other_proc, &t1, sizeof(HRT_TIMESTAMP_T));
-            module->recvfrom(other_proc, &t2, sizeof(HRT_TIMESTAMP_T));
+            module->sendto(other_proc, &t1, sizeof(HRT_TIMESTAMP_T), 0);
+            module->recvfrom(other_proc, &t2, sizeof(HRT_TIMESTAMP_T), 0);
 			/* MPI_Send(&t1, 8, MPI_BYTE, other_proc, 0, MPI_COMM_WORLD);
 			MPI_Recv(&t2, 8, MPI_BYTE, other_proc, 0, MPI_COMM_WORLD, &status);*/
 			HRT_GET_TIMESTAMP(t3);
@@ -99,9 +99,9 @@ void fdistrtt_do_benchmarks(struct ng_module *module) {
 		}
 		else {
 			//MPI_Recv(&t1, 8, MPI_BYTE, other_proc, 0, MPI_COMM_WORLD, &status);
-            module->recvfrom(other_proc, &t1, sizeof(HRT_TIMESTAMP_T));
+            module->recvfrom(other_proc, &t1, sizeof(HRT_TIMESTAMP_T), 0);
 			HRT_GET_TIMESTAMP(t2);
-            module->sendto(other_proc, &t2, sizeof(HRT_TIMESTAMP_T));
+            module->sendto(other_proc, &t2, sizeof(HRT_TIMESTAMP_T), 0);
 			//MPI_Send(&t2, 8, MPI_BYTE, other_proc, 0, MPI_COMM_WORLD);
 		}
 	}

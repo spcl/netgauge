@@ -15,10 +15,10 @@ static int  dummy_init(struct ng_options *global_opts);
 static void dummy_shutdown(struct ng_options *global_opts);
 void dummy_usage(void);
 void dummy_writemanpage(void);
-static int dummy_sendto(int dst, void *buffer, int size);
-static int dummy_recvfrom(int src, void *buffer, int size);
-static int dummy_isendto(int dst, void *buffer, int size, NG_Request *req);
-static int dummy_irecvfrom(int src, void *buffer, int size, NG_Request *req);
+static int dummy_sendto(int dst, void *buffer, int size, int tag);
+static int dummy_recvfrom(int src, void *buffer, int size, int tag);
+static int dummy_isendto(int dst, void *buffer, int size, int tag, NG_Request *req);
+static int dummy_irecvfrom(int src, void *buffer, int size, int tag, NG_Request *req);
 static int dummy_test(NG_Request *req);
 
 extern struct ng_options g_options;
@@ -44,17 +44,17 @@ static struct ng_module dummy_module = {
 };
 
 
-static int dummy_sendto(int dst, void *buffer, int size) {
+static int dummy_sendto(int dst, void *buffer, int size, int tag) {
   printf("not supported in dummy module\n");
   return 0;
 }
 
-static int dummy_isendto(int dst, void *buffer, int size, NG_Request *req) {
+static int dummy_isendto(int dst, void *buffer, int size, int tag, NG_Request *req) {
   printf("not supported in dummy module\n");
   return 0;
 }
 
-static int dummy_irecvfrom(int src, void *buffer, int size, NG_Request *req) {
+static int dummy_irecvfrom(int src, void *buffer, int size, int tag, NG_Request *req) {
   printf("not supported in dummy module\n");
   return 0;
 }
@@ -64,7 +64,7 @@ static int dummy_test(NG_Request *req) {
   return 0;
 }
 
-static int dummy_recvfrom(int src, void *buffer, int size) {
+static int dummy_recvfrom(int src, void *buffer, int size, int tag) {
   printf("not supported in dummy module\n");
   return 0;
 }

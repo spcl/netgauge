@@ -32,10 +32,10 @@ static int  libof_init(struct ng_options *global_opts);
 static void libof_shutdown(struct ng_options *global_opts);
 void libof_usage(void);
 void libof_writemanpage(void);
-static int libof_sendto(int dst, void *buffer, int size);
-static int libof_recvfrom(int src, void *buffer, int size);
-static int libof_isendto(int dst, void *buffer, int size, NG_Request *req);
-static int libof_irecvfrom(int src, void *buffer, int size, NG_Request *req);
+static int libof_sendto(int dst, void *buffer, int size, int tag);
+static int libof_recvfrom(int src, void *buffer, int size, int tag);
+static int libof_isendto(int dst, void *buffer, int size, int tag, NG_Request *req);
+static int libof_irecvfrom(int src, void *buffer, int size, int tag, NG_Request *req);
 static int libof_test(NG_Request *req);
 
 extern struct ng_options g_options;
@@ -75,14 +75,14 @@ static struct libof_private_data {
 } module_data;
 
 
-static int libof_sendto(int dst, void *buffer, int size) {
+static int libof_sendto(int dst, void *buffer, int size, int tag) {
   OF_Request req;
   OF_Isend(buffer, size, MPI_BYTE, dst, 0, MPI_COMM_WORLD, &req);
   OF_Wait(&req);
   return size;
 }
 
-static int libof_isendto(int dst, void *buffer, int size, NG_Request *req) {
+static int libof_isendto(int dst, void *buffer, int size, int tag, NG_Request *req) {
   OF_Request *ofreq;
   
   ofreq = malloc(sizeof(OF_Request));
@@ -94,7 +94,7 @@ static int libof_isendto(int dst, void *buffer, int size, NG_Request *req) {
   return size;
 }
 
-static int libof_irecvfrom(int src, void *buffer, int size, NG_Request *req) {
+static int libof_irecvfrom(int src, void *buffer, int size, int tag, NG_Request *req) {
   OF_Request *ofreq;
   
   ofreq = malloc(sizeof(OF_Request));
@@ -124,7 +124,7 @@ static int libof_test(NG_Request *req) {
   return 1;
 }
 
-static int libof_recvfrom(int src, void *buffer, int size) {
+static int libof_recvfrom(int src, void *buffer, int size, int tag) {
   OF_Request req;
   OF_Irecv(buffer, size, MPI_BYTE, src, 0, MPI_COMM_WORLD, &req);
   OF_Wait(&req);

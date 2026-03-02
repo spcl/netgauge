@@ -38,12 +38,12 @@ static void *libfabric_malloc(size_t size);
 
 static int libfabric_init(struct ng_options *global_opts);
 static void libfabric_shutdown(struct ng_options *global_opts);
-static int libfabric_sendto(int dst, void *buffer, int size);
-static int libfabric_recvfrom(int src, void *buffer, int size);
+static int libfabric_sendto(int dst, void *buffer, int size, int tag);
+static int libfabric_recvfrom(int src, void *buffer, int size, int tag);
 static int libfabric_set_blocking(int do_block, int partner);
 
-static int libfabric_isendto(int dst, void *buffer, int size, NG_Request *req);
-static int libfabric_irecvfrom(int src, void *buffer, int size, NG_Request *req);
+static int libfabric_isendto(int dst, void *buffer, int size, int tag, NG_Request *req);
+static int libfabric_irecvfrom(int src, void *buffer, int size, int tag, NG_Request *req);
 static int libfabric_test(NG_Request *req);
 
 #endif // NG_MOD_LIBFABRIC

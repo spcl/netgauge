@@ -57,7 +57,7 @@ int  cell_init(struct ng_options *global_opts);
 void cell_shutdown(struct ng_options *global_opts);
 void cell_usage(void);
 
-int cell_sendto(int dst, void *buffer, int size);
-int cell_recvfrom(int src, void *buffer, int size);
+int cell_sendto(int dst, void *buffer, int size, int tag);
+int cell_recvfrom(int src, void *buffer, int size, int tag);
 
 #endif /*MOD_CELL_H_*/

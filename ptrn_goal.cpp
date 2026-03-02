@@ -403,14 +403,14 @@ static void goal_do_benchmarks(struct ng_module *module) {
           
           switch (node_to_execute.Type) {
             case OPTYPE_SEND:
-              module->isendto(shift_peer_rank(node_to_execute.Peer), buffer + node_to_execute.offset, node_to_execute.Size, &started_op.request);
+              module->isendto(shift_peer_rank(node_to_execute.Peer), buffer + node_to_execute.offset, node_to_execute.Size, 0, &started_op.request);
               started_op.info.type = OPTYPE_SEND;
               started_op.info.peer = shift_peer_rank(node_to_execute.Peer);
               started_op.info.offset = node_to_execute.offset;
               started_op.info.size = node_to_execute.Size;
               break;
             case OPTYPE_RECV:
-              module->irecvfrom(shift_peer_rank(node_to_execute.Peer), buffer + node_to_execute.offset, node_to_execute.Size, &started_op.request);
+              module->irecvfrom(shift_peer_rank(node_to_execute.Peer), buffer + node_to_execute.offset, node_to_execute.Size, 0, &started_op.request);
               started_op.info.type = OPTYPE_RECV;
               started_op.info.peer = shift_peer_rank(node_to_execute.Peer);
               started_op.info.offset = node_to_execute.offset;

@@ -18,10 +18,10 @@
  *           Public function prototypes             *
  ****************************************************/
 
-static int ib_sendto(int dst, void *buffer, int size);
-static int ib_recvfrom(int src, void* buffer, int size);
-int ib_isendto(int dst, void *buffer, int size, NG_Request *req);
-int ib_irecvfrom(int src, void *buffer, int size, NG_Request *req);
+static int ib_sendto(int dst, void *buffer, int size, int tag);
+static int ib_recvfrom(int src, void* buffer, int size, int tag);
+int ib_isendto(int dst, void *buffer, int size, int tag, NG_Request *req);
+int ib_irecvfrom(int src, void *buffer, int size, int tag, NG_Request *req);
 static void* ib_malloc(size_t size);
 static int ib_init(struct ng_options *global_opts);
 static int ib_select(int count, int *clients, unsigned long timeout);

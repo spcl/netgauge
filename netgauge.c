@@ -1108,7 +1108,7 @@ int ng_send_all(int dst, void *buffer, int size, const struct ng_module *module)
    
    /* send data */
    while (sent_total < size) {
-      sent = module->sendto(dst, bufptr, size - sent_total);
+      sent = module->sendto(dst, bufptr, size - sent_total, 0);
 
       if (sent < 0) {
 	 /* s.t. went wrong... */
@@ -1129,7 +1129,7 @@ int ng_recv_all(int src, void *buffer, int size, const struct ng_module *module)
    
    /* recv data */
    while (recv_total < size) {
-      received = module->recvfrom(src, bufptr, size - recv_total);
+      received = module->recvfrom(src, bufptr, size - recv_total, 0);
       
       if (received < 0) {
 	 /* s.t. went wrong... */

@@ -44,8 +44,8 @@ static int enet_edp_init(struct ng_options *global_opts);
 static void enet_edp_shutdown(struct ng_options *global_opts);
 static void enet_edp_usage(void);
 static void enet_edp_writemanpage(void);
-static inline int enet_edp_sendto(int dst, void *buffer, int size);
-static inline int enet_edp_recvfrom(int src, void *buffer, int size);
+static inline int enet_edp_sendto(int dst, void *buffer, int size, int tag);
+static inline int enet_edp_recvfrom(int src, void *buffer, int size, int tag);
 static int enet_edp_set_blocking(int do_block, int partner);
 
 
@@ -314,7 +314,7 @@ static int enet_edp_set_blocking(int do_block, int partner) {
 
 
 /* module function for sending a single arbitrary sized buffer of data */
-static inline int enet_edp_sendto(int dst, void *buffer, int size) {
+static inline int enet_edp_sendto(int dst, void *buffer, int size, int tag) {
    char         *bufptr    = buffer;
    int          sent       = 0;
    unsigned int sent_total = 0;
@@ -356,7 +356,7 @@ static inline int enet_edp_sendto(int dst, void *buffer, int size) {
 
 
 /* module function for receiving a single arbitrary sized buffer of data */
-static inline int enet_edp_recvfrom(int src, void *buffer, int size) {
+static inline int enet_edp_recvfrom(int src, void *buffer, int size, int tag) {
    char     *bufptr        = buffer;
    int      rcvd           = 0;
    unsigned int rcvd_total = 0;

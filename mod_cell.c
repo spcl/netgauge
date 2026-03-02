@@ -272,7 +272,7 @@ void cell_shutdown(struct ng_options *global_opts __attribute__((unused))) {
 
 
 /** module function for sending a single buffer of data */
-int cell_sendto(int dst, void *buffer, int size) {
+int cell_sendto(int dst, void *buffer, int size, int tag) {
     /* send data to buffer */
     memcpy(module_data.local_store[0], buffer, size);
 
@@ -282,7 +282,7 @@ int cell_sendto(int dst, void *buffer, int size) {
 
 
 /** module function for receiving a single buffer of data */
-int cell_recvfrom(int src, void *buffer, int size) {
+int cell_recvfrom(int src, void *buffer, int size, int tag) {
    /* receive data to buffer */
    memcpy(buffer, module_data.local_store[0], size);
 

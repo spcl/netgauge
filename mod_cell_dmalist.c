@@ -18,8 +18,8 @@
 #include "mod_cell.h"
 
 /** module function prototypes */
-int cell_dmalist_sendto(int dst, void *buffer, int size);
-int cell_dmalist_recvfrom(int src, void *buffer, int size);
+int cell_dmalist_sendto(int dst, void *buffer, int size, int tag);
+int cell_dmalist_recvfrom(int src, void *buffer, int size, int tag);
 
 extern void cell_dma_usage(void);
 extern int cell_dma_getopt(int argc, char **argv, struct ng_options *global_opts);
@@ -48,7 +48,7 @@ struct cell_private_data module_data;
 
 
 /** module function for sending a single buffer of data */
-int cell_dmalist_sendto(int dst, void *buffer __attribute__((unused)), int size) {
+int cell_dmalist_sendto(int dst, void *buffer __attribute__((unused)), int size, int tag) {
    cell_task task;
    int ret;
    uint32_t data;
@@ -85,7 +85,7 @@ int cell_dmalist_sendto(int dst, void *buffer __attribute__((unused)), int size)
 
 
 /** module function for receiving a single buffer of data */
-int cell_dmalist_recvfrom(int src, void *buffer __attribute__((unused)), int size) {
+int cell_dmalist_recvfrom(int src, void *buffer __attribute__((unused)), int size, int tag) {
    cell_task task;
    int ret;
    uint32_t data;

@@ -18,8 +18,8 @@
 #include "mod_cell.h"
 
 /** module function prototypes */
-int cell_mail_sendto(int dst, void *buffer, int size);
-int cell_mail_recvfrom(int src, void *buffer, int size);
+int cell_mail_sendto(int dst, void *buffer, int size, int tag);
+int cell_mail_recvfrom(int src, void *buffer, int size, int tag);
 void cell_mail_usage(void);
 int  cell_mail_getopt(int argc, char **argv, struct ng_options *global_opts);
 int cell_mail_setup_channels();
@@ -47,7 +47,7 @@ struct cell_private_data module_data;
 
 
 /** module function for sending a single buffer of data */
-int cell_mail_sendto(int dst, void *buffer, int size) {
+int cell_mail_sendto(int dst, void *buffer, int size, int tag) {
    cell_task task;
    int ret;
    uint32_t data;
@@ -115,7 +115,7 @@ int cell_mail_sendto(int dst, void *buffer, int size) {
 
 
 /** module function for receiving a single buffer of data */
-int cell_mail_recvfrom(int src, void *buffer, int size) {
+int cell_mail_recvfrom(int src, void *buffer, int size, int tag) {
    cell_task task;
    int ret;
    uint32_t data;
