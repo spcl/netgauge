@@ -36,6 +36,8 @@ AC_DEFUN([NG_WITH_LIBFABRIC], [
               PKG_CONFIG_PATH="$with_libfabric_path/pkgconfig:$ORIG_PKG_CONFIG_PATH"
           ])
           export PKG_CONFIG_PATH
+          CPPFLAGS="$CPPFLAGS -I$with_libfabric_path/../libfabric/prov/verbs/src"
+          export CPPFLAGS
       ])
       dnl Check for libfabric using pkg-config
       PKG_CHECK_MODULES([LIBFABRIC], [libfabric],

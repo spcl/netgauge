@@ -19,6 +19,14 @@
 #include "mod_ibv.h"
 
 #include <string.h>
+#include <stdbool.h>
+
+#define VERBOSE_LOG(fmt, ...)                    \
+    do {                                         \
+        if (0) {                                 \
+            fprintf(stderr, fmt, ##__VA_ARGS__); \
+        }                                        \
+    } while (0)
 
 extern struct ng_options g_options;
 
@@ -26,7 +34,8 @@ extern struct ng_options g_options;
 static struct ng_module ibv_module = {
    .name           = "ibv",
    .desc           = "Mode ibv uses Infiniband 1:1 communication for data transmission.",
-   .max_datasize   = -1,      /* can send data of arbitrary size */
+   .max_datasize   = 256 * 1024 * 1024,      /* can send data of arbitrary size */
+   // .max_datasize   = 16777216,      /* can send data of arbitrary size */
    .headerlen      = 0,       /* no extra space needed for header */
    .flags          = NG_MOD_MEMREG | NG_MOD_RELIABLE | NG_MOD_CHANNEL, /* UD??? */
    .malloc         = NULL, /* TODO: implement */
@@ -36,8 +45,26 @@ static struct ng_module ibv_module = {
    .usage          = ibv_usage,
    .sendto         = ibv_sendto,
    .recvfrom       = ibv_recvfrom,
-   .writemanpage   = ibv_writemanpage
+   .writemanpage   = ibv_writemanpage,
+   .isendto        = ibv_isendto,
+   .irecvfrom      = ibv_irecvfrom,
+   .test           = ibv_test,
 };
+
+// Returned by async operations as handle to check for completion
+typedef struct {
+    bool completed;
+    int peer;
+} ibv_completion_handle_t;
+
+#define MAX_HANDLES 1024
+
+ibv_completion_handle_t* ibv_get_completion_handle() {
+    static ibv_completion_handle_t handles[MAX_HANDLES];
+    static int next_handle = 0;
+
+    return &handles[next_handle++ % MAX_HANDLES];
+}
 
 /* parses the module specific options and set some values in module_data
  * return 0 on success and 1 otherwise
@@ -169,7 +196,10 @@ ibv_init (struct ng_options *global_opts) {
     */
    module_data.mpi_partner  = (global_opts->mpi_opts->worldrank+1)%2 ;
    module_data.mpi_comm     = MPI_COMM_WORLD; // global_opts->mpi_opts->comm;
-   module_data.max_datasize = global_opts->max_datasize;
+   module_data.max_datasize = 256 * 1024 * 1024;
+   // module_data.max_datasize = 16777216 * 2; /* 16 MB max data size */
+   module_data.mpi_size     = global_opts->mpi_opts->worldsize;
+   module_data.mpi_rank     = global_opts->mpi_opts->worldrank;
                
    /* FIXME size of the transmission queue */
    module_data.tx_depth = 100;
@@ -248,62 +278,81 @@ ibv_init (struct ng_options *global_opts) {
       return 1;
    }
 
-   /* create the completion queue */
-   module_data.cq = ibv_create_cq(module_data.context, 
-                                    module_data.tx_depth,
-                                    NULL,
-                                    NULL,
-                                    0);
-   if (!module_data.cq) {
-      ng_error("Couldn't create the completion queue");
-      return 1;
-   }
+   // Allocate memory for completion queues and queue pairs
+   module_data.cq = malloc(sizeof(struct ibv_cq*) * module_data.mpi_size);
+   module_data.qp = malloc(sizeof(struct ibv_qp*) * module_data.mpi_size);
 
-   /* set initial values for the queue pair */
-   initattr.send_cq = module_data.cq;
-   initattr.recv_cq = module_data.cq;
-   initattr.cap.max_send_wr = module_data.tx_depth;
-   /* Work around from OFED perftest write_bw:  
-    * driver doesnt support
-    * recv_wr = 0 */
-   initattr.cap.max_recv_wr  = 1;
-   initattr.cap.max_send_sge = 1;
-   initattr.cap.max_recv_sge = 1;
-   initattr.cap.max_inline_data = MAX_INLINE;
-   initattr.qp_type = module_data.tran_type;
+   // Create a queue pair for each peer node
+   for (int i = 0; i < module_data.mpi_size; i++) {
+      // Skip creating a QP for ourselves
+      if (0) {
+         continue;
+      }
 
-   /* create the queue pair */
-   module_data.qp = ibv_create_qp(module_data.pd,
-                                  &initattr);
-   if (!module_data.qp) {
-      ng_error("Couldn't create the queue pair");
-      return 1;
-   }
-   
-   /* modify the queue pair to an initial state */
-   attr.qp_state        = IBV_QPS_INIT;
-   attr.pkey_index      = 0;
-   attr.port_num        = 1;              /* FIXME: no static port */
-   if (module_data.tran_type == IBV_QPT_UD) {
-      attr.qkey            = 0x11111111;
-      retval = ibv_modify_qp(module_data.qp, &attr, 
-                              IBV_QP_STATE              |
-                              IBV_QP_PKEY_INDEX         |
-                              IBV_QP_PORT               |
-                              IBV_QP_QKEY);
-   } else {
-      attr.qp_access_flags = IBV_ACCESS_REMOTE_WRITE | 
-                             IBV_ACCESS_LOCAL_WRITE  |
-                             IBV_ACCESS_REMOTE_READ;
-      retval = ibv_modify_qp(module_data.qp, &attr,
-                              IBV_QP_STATE              |
-                              IBV_QP_PKEY_INDEX         |
-                              IBV_QP_PORT               |
-                              IBV_QP_ACCESS_FLAGS);
-   }
-   if (retval) {
-      ng_error("Couldn't modify the queue pair to INIT state");
-      return 1;
+      struct ibv_cq *cq;
+      struct ibv_qp *qp;
+
+      /* create the completion queue */
+      cq = ibv_create_cq(module_data.context, 
+                                       module_data.tx_depth,
+                                       NULL,
+                                       NULL,
+                                       0);
+      if (!cq) {
+         ng_error("Couldn't create the completion queue");
+         return 1;
+      }
+
+      /* set initial values for the queue pair */
+      initattr.send_cq = cq;
+      initattr.recv_cq = cq;
+      initattr.cap.max_send_wr = module_data.tx_depth;
+      /* Work around from OFED perftest write_bw:  
+       * driver doesnt support
+       * recv_wr = 0 */
+      initattr.cap.max_recv_wr  = 100;
+      initattr.cap.max_send_sge = 1;
+      initattr.cap.max_recv_sge = 1;
+      initattr.cap.max_inline_data = MAX_INLINE;
+      initattr.qp_type = module_data.tran_type;
+
+      /* create the queue pair */
+      qp = ibv_create_qp(module_data.pd,
+                                     &initattr);
+      if (!qp) {
+         ng_error("Couldn't create the queue pair");
+         return 1;
+      }
+
+      /* modify the queue pair to an initial state */
+      attr.qp_state        = IBV_QPS_INIT;
+      attr.pkey_index      = 0;
+      attr.port_num        = 1;              /* FIXME: no static port */
+      if (module_data.tran_type == IBV_QPT_UD) {
+         attr.qkey            = 0x11111111;
+         retval = ibv_modify_qp(qp, &attr, 
+                                 IBV_QP_STATE              |
+                                 IBV_QP_PKEY_INDEX         |
+                                 IBV_QP_PORT               |
+                                 IBV_QP_QKEY);
+      } else {
+         attr.qp_access_flags = IBV_ACCESS_REMOTE_WRITE | 
+                                IBV_ACCESS_LOCAL_WRITE  |
+                                IBV_ACCESS_REMOTE_READ;
+         retval = ibv_modify_qp(qp, &attr,
+                                 IBV_QP_STATE              |
+                                 IBV_QP_PKEY_INDEX         |
+                                 IBV_QP_PORT               |
+                                 IBV_QP_ACCESS_FLAGS);
+      }
+      if (retval) {
+         ng_error("Couldn't modify the queue pair to INIT state");
+         return 1;
+      }
+
+      // Save CQ and QP in module data
+      module_data.cq[i] = cq;
+      module_data.qp[i] = qp;
    }
 
    /* TODO: merge functions! */
@@ -318,10 +367,6 @@ static int ibv_setup_channels(void) {
    /* attr struct to gather the lid */
    struct ibv_port_attr pattr;
    memset(&pattr, 0 , sizeof(struct ibv_port_attr));
-   
-   /* parameter struct for state transitions */
-   struct ibv_qp_attr qpattr;
-   memset(&qpattr, 0, sizeof(struct ibv_qp_attr));
 
    /* FIXME don't use a static port */
    if (!ibv_query_port(module_data.context, 1, &pattr) && !pattr.lid) {
@@ -330,159 +375,236 @@ static int ibv_setup_channels(void) {
    }
    module_data.llid = pattr.lid;
 
-   /* setting the psn to a random value */
-   srand48(getpid() * time(NULL));
-   module_data.lpsn = lrand48() & 0xffffff;
-   
-   /* exchange the LID */
-   if(MPI_Sendrecv(&module_data.llid, 1, MPI_UNSIGNED_SHORT, module_data.mpi_partner, 11,
-                   &module_data.rlid, 1, MPI_UNSIGNED_SHORT, module_data.mpi_partner, 11,
-                   module_data.mpi_comm, &status)
-       != MPI_SUCCESS) {
-      ng_error("Couldn't send and receive the lid to/from %d",
-         module_data.mpi_partner);
+   // Allocate memory for LIDS of all nodes 
+   module_data.rlid = malloc(sizeof(uint16_t) * module_data.mpi_size);
+
+   /* Exchange LIDs between all nodes using MPI_Allgather */
+   if(MPI_Allgather(&module_data.llid, 1, MPI_UNSIGNED_SHORT,
+                    module_data.rlid, 1, MPI_UNSIGNED_SHORT,
+                    module_data.mpi_comm) != MPI_SUCCESS) {
+      ng_error("Couldn't exchange LIDs between nodes");
       return 1;
    }
 
-   /* exchange the packet sequence number (uint32_t) */
-   if(MPI_Sendrecv(&module_data.lpsn, 1, MPI_UNSIGNED, module_data.mpi_partner, 22,
-                   &module_data.rpsn, 1, MPI_UNSIGNED, module_data.mpi_partner, 22,
-                   module_data.mpi_comm, &status)
-       != MPI_SUCCESS) {
-      ng_error("Couldn't send and receive the packet sequence numbers to/from %d",
-         module_data.mpi_partner);
-      return 1;
+   /* setting the psn to a random value for every qp */
+   srand48(getpid() * time(NULL)); // Inint RNG
+   module_data.lpsn = malloc(sizeof(uint32_t) * module_data.mpi_size);
+   for (int i = 0; i < module_data.mpi_size; i++) {
+      module_data.lpsn[i] = lrand48() & 0xffffff;
+   }
+
+   module_data.rpsn = malloc(sizeof(uint32_t) * module_data.mpi_size);
+
+   /* exchange the packet sequence number (uint32_t) with with all other nodes */
+   for (int i = 0; i < module_data.mpi_size; i++) {
+      if (i == module_data.mpi_rank) {
+         continue; // Skip self
+      }
+      if(MPI_Sendrecv(&module_data.lpsn[i], 1, MPI_UNSIGNED, i, 22,
+                      &module_data.rpsn[i], 1, MPI_UNSIGNED, i, 22,
+                      module_data.mpi_comm, &status)
+          != MPI_SUCCESS) {
+         ng_error("Couldn't send and receive the packet sequence numbers to/from %d",
+            i);
+         return 1;
+      }
    }
    
+   module_data.rbuf = malloc(sizeof(unsigned long long) * module_data.mpi_size);
+
    /* exchange the memory addresses of the buffers */
-   if (MPI_Sendrecv(&module_data.buf, 1, MPI_UNSIGNED_LONG_LONG, module_data.mpi_partner, 33, 
-                    &module_data.rbuf, 1, MPI_UNSIGNED_LONG_LONG, module_data.mpi_partner, 33,
-                    module_data.mpi_comm, &status) 
-       != MPI_SUCCESS) {
-      ng_error("Couldn't send and receive the remote memory address to/from %d",
-         module_data.mpi_partner);
+   if(MPI_Allgather(&module_data.buf, 1, MPI_UNSIGNED_LONG_LONG,
+                     module_data.rbuf, 1, MPI_UNSIGNED_LONG_LONG,
+                     module_data.mpi_comm) != MPI_SUCCESS) {
+      ng_error("Couldn't exchange the memory addresses between nodes");
       return 1;
-   }
+   }  
    
+   module_data.rrkey = malloc(sizeof(uint32_t) * module_data.mpi_size);
+
    /* get the rkey (uint32_t) from the partner and send the own */
-   if (MPI_Sendrecv(&module_data.mr->rkey, 1, MPI_UNSIGNED, module_data.mpi_partner, 44,
-                    &module_data.rrkey, 1, MPI_UNSIGNED, module_data.mpi_partner, 44, 
-                    module_data.mpi_comm, &status) 
-       != MPI_SUCCESS) {
-      ng_error("Couldn't send and receive the remote keys to/from %d",
-         module_data.mpi_partner);
+   if (MPI_Allgather(&module_data.mr->rkey, 1, MPI_UNSIGNED,
+                    module_data.rrkey, 1, MPI_UNSIGNED,
+                    module_data.mpi_comm) != MPI_SUCCESS) {
+      ng_error("Couldn't exchange remote keys between nodes");
       return 1;
    }
    
+   module_data.rqp_num = malloc(sizeof(uint32_t) * module_data.mpi_size);
+
    /* send and receive the queue pair num */
-   if (MPI_Sendrecv(&module_data.qp->qp_num, 1, MPI_UNSIGNED, module_data.mpi_partner, 55,
-                    &module_data.rqp_num, 1, MPI_UNSIGNED, module_data.mpi_partner, 55,
-                    module_data.mpi_comm, &status)
-       != MPI_SUCCESS) {
-      ng_error("Couldn't send and receive the queue pair numbers to/from %d",
-         module_data.mpi_partner);
-      return 1;
+   for (int i = 0; i < module_data.mpi_size; i++) {
+      if (i == module_data.mpi_rank) {
+         continue; // Skip self
+      }
+      if (MPI_Sendrecv(&module_data.qp[i]->qp_num, 1, MPI_UNSIGNED, i, 55,
+                       &module_data.rqp_num[i], 1, MPI_UNSIGNED, i, 55,
+                       module_data.mpi_comm, &status)
+          != MPI_SUCCESS) {
+         ng_error("Couldn't send and receive the queue pair numbers to/from %d",
+            module_data.mpi_partner);
+         return 1;
+      }
    }
 
-   /* print some debug infos to the exchanged ib parameters */
-   ng_info(NG_VLEV2 | NG_VPALL,"local information:  LID %#04x, QPN %#06x, PSN %#06x "
-                    "RKey %#08x VAddr %#016Lx",
-                    module_data.llid, module_data.qp->qp_num, module_data.lpsn,
-                    module_data.mr->rkey, module_data.buf);
-   ng_info(NG_VLEV2 | NG_VPALL,"remote information: LID %#04x, QPN %#06x, PSN %#06x "
-                    "RKey %#08x VAddr %#016Lx",
-                    module_data.rlid, module_data.rqp_num, module_data.rpsn,
-                    module_data.rrkey, module_data.rbuf);
+   // /* print some debug infos to the exchanged ib parameters */
+   // ng_info(NG_VLEV2 | NG_VPALL,"local information:  LID %#04x, QPN %#06x, PSN %#06x "
+   //                  "RKey %#08x VAddr %#016Lx",
+   //                  module_data.llid, module_data.qp->qp_num, module_data.lpsn,
+   //                  module_data.mr->rkey, module_data.buf);
+   // ng_info(NG_VLEV2 | NG_VPALL,"remote information: LID %#04x, QPN %#06x, PSN %#06x "
+   //                  "RKey %#08x VAddr %#016Lx",
+   //                  module_data.rlid, module_data.rqp_num, module_data.rpsn,
+   //                  module_data.rrkey, module_data.rbuf);
 
-   /* transit the queue pair to ReadyToReceive state */
-   qpattr.qp_state = IBV_QPS_RTR;
-   qpattr.path_mtu = IBV_MTU_2048; /* FIXME: add this as a parameter */
-   qpattr.dest_qp_num = module_data.rqp_num;
-   qpattr.rq_psn = module_data.rpsn;
+   module_data.ah = malloc(sizeof(struct ibv_ah*) * module_data.mpi_size);
 
-   qpattr.ah_attr.is_global  = 0;
-   qpattr.ah_attr.dlid       = module_data.rlid;
-   qpattr.ah_attr.sl         = 0;
-   qpattr.ah_attr.src_path_bits = 0;
-   qpattr.ah_attr.port_num   = 1; /* FIXME no static port */
-
-   if (module_data.tran_type == IBV_QPT_RC) {
-      qpattr.max_dest_rd_atomic     = 1;
-      qpattr.min_rnr_timer          = 12;
-      if(ibv_modify_qp(module_data.qp, &qpattr,
-                        IBV_QP_STATE               |
-                        IBV_QP_AV                  |
-                        IBV_QP_PATH_MTU            |
-                        IBV_QP_DEST_QPN            |
-                        IBV_QP_RQ_PSN              |
-                        IBV_QP_MIN_RNR_TIMER       |
-                        IBV_QP_MAX_DEST_RD_ATOMIC)) {
-         ng_error("Failed to modify RC QP to RTR");
-         return 1;
+   for (int i = 0; i < module_data.mpi_size; i++) {
+      if (i == module_data.mpi_rank) {
+         continue; // Skip self
       }
-      ng_info(NG_VLEV2, "Modified RC QP to RTR");
-   } else if (module_data.tran_type == IBV_QPT_UC) {
-      if(ibv_modify_qp(module_data.qp, &qpattr,
-                        IBV_QP_STATE               |
-                        IBV_QP_AV                  |
-                        IBV_QP_PATH_MTU            |
-                        IBV_QP_DEST_QPN            |
-                        IBV_QP_RQ_PSN)) {
-         ng_error("Failed to modify UC QP to RTR");
-         return 1;
+
+      /* parameter struct for state transitions */
+      struct ibv_qp_attr qpattr;
+      memset(&qpattr, 0, sizeof(struct ibv_qp_attr));
+
+      /* transit the queue pair to ReadyToReceive state */
+      qpattr.qp_state = IBV_QPS_RTR;
+      qpattr.path_mtu = IBV_MTU_2048; /* FIXME: add this as a parameter */
+      qpattr.dest_qp_num = module_data.rqp_num[i];
+      qpattr.rq_psn = module_data.rpsn[i];
+
+      qpattr.ah_attr.is_global  = 0;
+      qpattr.ah_attr.dlid       = module_data.rlid[i];
+      qpattr.ah_attr.sl         = 0;
+      qpattr.ah_attr.src_path_bits = 0;
+      qpattr.ah_attr.port_num   = 1; /* FIXME no static port */
+
+      if (module_data.tran_type == IBV_QPT_RC) {
+         qpattr.max_dest_rd_atomic     = 1;
+         qpattr.min_rnr_timer          = 12;
+         if(ibv_modify_qp(module_data.qp[i], &qpattr,
+                           IBV_QP_STATE               |
+                           IBV_QP_AV                  |
+                           IBV_QP_PATH_MTU            |
+                           IBV_QP_DEST_QPN            |
+                           IBV_QP_RQ_PSN              |
+                           IBV_QP_MIN_RNR_TIMER       |
+                           IBV_QP_MAX_DEST_RD_ATOMIC)) {
+            ng_error("Failed to modify RC QP to RTR");
+            return 1;
+         }
+         ng_info(NG_VLEV2, "Modified RC QP to RTR");
+      } else if (module_data.tran_type == IBV_QPT_UC) {
+         if(ibv_modify_qp(module_data.qp[i], &qpattr,
+                           IBV_QP_STATE               |
+                           IBV_QP_AV                  |
+                           IBV_QP_PATH_MTU            |
+                           IBV_QP_DEST_QPN            |
+                           IBV_QP_RQ_PSN)) {
+            ng_error("Failed to modify UC QP to RTR");
+            return 1;
+         }
+         ng_info(NG_VLEV2, "Modified UC QP to RTR");
+      } else {
+         if(ibv_modify_qp(module_data.qp[i], &qpattr,
+                           IBV_QP_STATE)) {
+            ng_error("Failed to modify UD QP to RTR");
+            return 1;
+         }
+         ng_info(NG_VLEV2, "Modified UD QP to RTR");
       }
-      ng_info(NG_VLEV2, "Modified UC QP to RTR");
+
+      /* transit the queue pair to ReadyToSend state */
+      qpattr.qp_state = IBV_QPS_RTS;
+      qpattr.sq_psn = module_data.lpsn[i];
+      if (module_data.tran_type == IBV_QPT_RC) {
+         qpattr.timeout       = 14;
+         qpattr.retry_cnt     = 7;
+         qpattr.rnr_retry     = 7;
+         qpattr.max_rd_atomic = 1;
+         if(ibv_modify_qp(module_data.qp[i], &qpattr,
+                           IBV_QP_STATE              |
+                           IBV_QP_SQ_PSN             |
+                           IBV_QP_TIMEOUT            |
+                           IBV_QP_RETRY_CNT          |
+                           IBV_QP_RNR_RETRY          |
+                           IBV_QP_MAX_QP_RD_ATOMIC)) {
+            ng_error("Failed to modify RC QP to RTS");
+            return 1;
+         }
+         ng_info(NG_VLEV2, "Modified RC QP to RTS");
+      } else {
+         if(ibv_modify_qp(module_data.qp[i], &qpattr,
+                           IBV_QP_STATE              |
+                           IBV_QP_SQ_PSN)) {
+            ng_error("Failed to modify UC/UD to RTS");
+            return 1;
+         }
+         ng_info(NG_VLEV2, "Modified UC/UD to RTS");
+      }
+      if (module_data.tran_type == IBV_QPT_UD) {
+         module_data.ah[i] = ibv_create_ah(module_data.pd, &qpattr.ah_attr);
+         if (!module_data.ah[i]) {
+            ng_error("Failed to create AH for UD");
+            return 1;
+         }
+         ng_info(NG_VLEV2, "Created AH for UD");
+      }
+   } /* for all peers */
+
+   if (module_data.mpi_rank != 1) {
+      return 0;
+   }
+
+   struct ibv_qp_attr attr;
+   struct ibv_qp_init_attr init_attr;
+   int attr_mask = IBV_QP_QKEY 
+             | IBV_QP_RQ_PSN 
+             | IBV_QP_SQ_PSN 
+             | IBV_QP_DEST_QPN 
+             | IBV_QP_PKEY_INDEX 
+             | IBV_QP_EN_SQD_ASYNC_NOTIFY 
+             | IBV_QP_MAX_QP_RD_ATOMIC 
+             | IBV_QP_MAX_DEST_RD_ATOMIC 
+             | IBV_QP_MIN_RNR_TIMER 
+             | IBV_QP_PORT 
+             | IBV_QP_TIMEOUT 
+             | IBV_QP_RETRY_CNT 
+             | IBV_QP_RNR_RETRY 
+             | IBV_QP_ALT_PATH // Covers alt_pkey, alt_port, alt_timeout
+             | IBV_QP_STATE;
+   int rc = ibv_query_qp(module_data.qp[0], &attr, IBV_QP_STATE, &init_attr);
+   if (rc) {
+       fprintf(stderr, "ibv_query_qp failed: %d\n", rc);
    } else {
-      if(ibv_modify_qp(module_data.qp, &qpattr,
-                        IBV_QP_STATE)) {
-         ng_error("Failed to modify UD QP to RTR");
-         return 1;
-      }
-      ng_info(NG_VLEV2, "Modified UD QP to RTR");
+       VERBOSE_LOG("QP attributes:\n");
+       VERBOSE_LOG("  qkey: %u\n", attr.qkey);
+       VERBOSE_LOG("  rq_psn: %u\n", attr.rq_psn);
+       VERBOSE_LOG("  sq_psn: %u\n", attr.sq_psn);
+       VERBOSE_LOG("  dest_qp_num: %u\n", attr.dest_qp_num);
+       VERBOSE_LOG("  pkey_index: %u\n", attr.pkey_index);
+       VERBOSE_LOG("  alt_pkey_index: %u\n", attr.alt_pkey_index);
+       VERBOSE_LOG("  en_sqd_async_notify: %d\n", attr.en_sqd_async_notify);
+       VERBOSE_LOG("  sq_draining: %d\n", attr.sq_draining);
+       VERBOSE_LOG("  max_rd_atomic: %d\n", attr.max_rd_atomic);
+       VERBOSE_LOG("  max_dest_rd_atomic: %d\n", attr.max_dest_rd_atomic);
+       VERBOSE_LOG("  min_rnr_timer: %d\n", attr.min_rnr_timer);
+       VERBOSE_LOG("  port_num: %d\n", attr.port_num);
+       VERBOSE_LOG("  timeout: %d\n", attr.timeout);
+       VERBOSE_LOG("  retry_cnt: %d\n", attr.retry_cnt);
+       VERBOSE_LOG("  rnr_retry: %d\n", attr.rnr_retry);
+       VERBOSE_LOG("  alt_port_num: %d\n", attr.alt_port_num);
+       VERBOSE_LOG("  alt_timeout: %d\n", attr.alt_timeout);
    }
 
-   /* transit the queue pair to ReadyToSend state */
-   qpattr.qp_state = IBV_QPS_RTS;
-   qpattr.sq_psn = module_data.lpsn;
-   if (module_data.tran_type == IBV_QPT_RC) {
-      qpattr.timeout       = 14;
-      qpattr.retry_cnt     = 7;
-      qpattr.rnr_retry     = 7;
-      qpattr.max_rd_atomic = 1;
-      if(ibv_modify_qp(module_data.qp, &qpattr,
-                        IBV_QP_STATE              |
-                        IBV_QP_SQ_PSN             |
-                        IBV_QP_TIMEOUT            |
-                        IBV_QP_RETRY_CNT          |
-                        IBV_QP_RNR_RETRY          |
-                        IBV_QP_MAX_QP_RD_ATOMIC)) {
-         ng_error("Failed to modify RC QP to RTS");
-         return 1;
-      }
-      ng_info(NG_VLEV2, "Modified RC QP to RTS");
-   } else {
-      if(ibv_modify_qp(module_data.qp, &qpattr,
-                        IBV_QP_STATE              |
-                        IBV_QP_SQ_PSN)) {
-         ng_error("Failed to modify UC/UD to RTS");
-         return 1;
-      }
-      ng_info(NG_VLEV2, "Modified UC/UD to RTS");
-   }
-   if (module_data.tran_type == IBV_QPT_UD) {
-      module_data.ah = ibv_create_ah(module_data.pd, &qpattr.ah_attr);
-      if (!module_data.ah) {
-         ng_error("Failed to create AH for UD");
-         return 1;
-      }
-      ng_info(NG_VLEV2, "Created AH for UD");
-   }
    return 0;
 }
  
 /* send data of size 'size' to the partner :) */
 static int
 ibv_sendto(int dst, void *buffer, int size) {
+   ng_info(NG_VLEV2, "ibv_sendto: sending %d bytes to peer %d", size, dst);
    
    struct ibv_send_wr *bad_wr;
    struct ibv_wc wc;
@@ -496,7 +618,7 @@ ibv_sendto(int dst, void *buffer, int size) {
    module_data.send_list.addr          = (uintptr_t) module_data.buf;
    module_data.send_list.length        = size;
    module_data.send_list.lkey          = module_data.mr->lkey;
-   module_data.wr.wr_id                = 0xff;
+   module_data.wr.wr_id                = NULL;
    module_data.wr.sg_list              = &module_data.send_list;
    module_data.wr.num_sge              = 1;
    module_data.wr.opcode               = module_data.tran_mode;
@@ -505,23 +627,25 @@ ibv_sendto(int dst, void *buffer, int size) {
    /* set some extra stuff for RDMA mode */
    if (module_data.tran_mode != IBV_WR_SEND && 
        module_data.tran_type != IBV_QPT_UD) {
-      module_data.wr.wr.rdma.remote_addr  = module_data.rbuf;
-      module_data.wr.wr.rdma.rkey         = module_data.rrkey;
+      module_data.wr.wr.rdma.remote_addr  = module_data.rbuf; // TODO: fix this
+      module_data.wr.wr.rdma.rkey         = module_data.rrkey; // TODO: fix this
    }
-   
+   ng_info(NG_VLEV2, "ibv_sendto: before UD settings");
    if (module_data.tran_type == IBV_QPT_UD) {
       module_data.send_list.addr       = (uintptr_t) module_data.buf + 40;
-      module_data.wr.wr.ud.ah          = module_data.ah;
-      module_data.wr.wr.ud.remote_qpn  = module_data.rqp_num;
+      module_data.wr.wr.ud.ah          = module_data.ah[dst];
+      module_data.wr.wr.ud.remote_qpn  = module_data.rqp_num[dst];
       module_data.wr.wr.ud.remote_qkey = 0x11111111;
    }
-   if(ibv_post_send(module_data.qp, &module_data.wr, &bad_wr)) {
+   ng_info(NG_VLEV2, "ibv_sendto: posting send");
+   if(ibv_post_send(module_data.qp[dst], &module_data.wr, &bad_wr)) {
       ng_error("Couldn't post send in %s", __func__);
       return -1;
    }
+   ng_info(NG_VLEV2, "ibv_sendto: posted send, polling cq");
    
    do {
-      ne = ibv_poll_cq(module_data.cq, 1, &wc);
+      ne = ibv_poll_cq(module_data.cq[dst], 1, &wc);
    } while (ne == 0);
    
    if (ne < 0) {
@@ -533,13 +657,14 @@ ibv_sendto(int dst, void *buffer, int size) {
                wc.status, (int)wc.wr_id);
       return -1;
    }
-   /* FIXME: do we really need a barrier here? */
-   /* MPI_Barrier(module_data.mpi_comm); */
+
    return size;
 }
 
 static int
 ibv_recvfrom(int src, void *buffer, int size) {
+   ng_info(NG_VLEV2, "ibv_recvfrom: posting recv for %d bytes from peer %d", size, src);
+
    struct ibv_recv_wr *bad_rwr;
    struct ibv_wc wc;
    int ne;
@@ -553,20 +678,20 @@ ibv_recvfrom(int src, void *buffer, int size) {
       module_data.recv_list.addr          = (uintptr_t) module_data.buf;
       module_data.recv_list.length        = size;
       module_data.recv_list.lkey          = module_data.mr->lkey;
-      module_data.rwr.wr_id               = 0xff;
+      module_data.rwr.wr_id               = NULL;
       module_data.rwr.sg_list             = &module_data.recv_list;
       module_data.rwr.num_sge             = 1; 
       module_data.rwr.next                = NULL;
       if (module_data.tran_type == IBV_QPT_UD) {
          module_data.recv_list.addr       = (uintptr_t) module_data.buf + 40;
       }
-      if(ibv_post_recv(module_data.qp, &module_data.rwr, &bad_rwr)) {
+      if(ibv_post_recv(module_data.qp[src], &module_data.rwr, &bad_rwr)) {
          ng_error("Couldn't post recv in %s", __func__);
          return -1;
       }
       
       do {
-         ne = ibv_poll_cq(module_data.cq, 1, &wc);
+         ne = ibv_poll_cq(module_data.cq[src], 1, &wc);
       } while (ne == 0);
       
       if (ne < 0) {
@@ -579,10 +704,165 @@ ibv_recvfrom(int src, void *buffer, int size) {
          return -1;
       }
    }
-   //MPI_Barrier(module_data.mpi_comm);
+
    return size;
 }
 
+/* send data of size 'size' to the partner :) */
+static int
+ibv_isendto(int dst, void *buffer, int size, NG_Request *req) {
+   ng_info(NG_VLEV2, "ibv_isendto: queued isend %d bytes to %d", size, dst);
+   
+   struct ibv_send_wr *bad_wr;
+   struct ibv_wc wc;
+   int ne;
+   /* at the moment we have to copy buffer content to the registered 
+    * buffer of the hca --> a nice mess 
+    * FIXME this is a hard operation for benchmarking 
+    * memcpy(module_data.buf, buffer, size); 
+    */
+
+   ibv_completion_handle_t* completion_handle = ibv_get_completion_handle();
+   completion_handle->completed = false;
+   completion_handle->peer = dst;
+
+   *req = (NG_Request)completion_handle;
+   
+   module_data.send_list.addr          = (uintptr_t) module_data.buf;
+   module_data.send_list.length        = size;
+   module_data.send_list.lkey          = module_data.mr->lkey;
+   module_data.wr.wr_id                = (int64_t)completion_handle;
+   module_data.wr.sg_list              = &module_data.send_list;
+   module_data.wr.num_sge              = 1;
+   module_data.wr.opcode               = module_data.tran_mode;
+   module_data.wr.send_flags           = IBV_SEND_SIGNALED;
+   module_data.wr.next                 = NULL;
+   /* set some extra stuff for RDMA mode */
+   if (module_data.tran_mode != IBV_WR_SEND && 
+       module_data.tran_type != IBV_QPT_UD) {
+      module_data.wr.wr.rdma.remote_addr  = module_data.rbuf; // TODO: fix
+      module_data.wr.wr.rdma.rkey         = module_data.rrkey; // TODO: fix
+   }
+   
+   if (module_data.tran_type == IBV_QPT_UD) {
+      module_data.send_list.addr       = (uintptr_t) module_data.buf + 40;
+      module_data.wr.wr.ud.ah          = module_data.ah[dst];
+      module_data.wr.wr.ud.remote_qpn  = module_data.rqp_num[dst];
+      module_data.wr.wr.ud.remote_qkey = 0x11111111;
+   }
+   if(ibv_post_send(module_data.qp[dst], &module_data.wr, &bad_wr)) {
+      ng_error("Couldn't post send in %s", __func__);
+      return -1;
+   }
+
+   return size;
+}
+
+static int
+ibv_irecvfrom(int src, void *buffer, int size, NG_Request *req) {
+   ng_info(NG_VLEV2, "ibv_irecvfrom: posted irecv %d bytes from %d", size, src);
+
+   struct ibv_recv_wr *bad_rwr;
+   struct ibv_wc wc;
+   int ne;
+
+   ibv_completion_handle_t* completion_handle = ibv_get_completion_handle();
+   completion_handle->completed = false;
+   completion_handle->peer = src;
+
+   if (completion_handle == NULL) {
+       ng_error("Couldn't get completion handle in %s", __func__);
+   } else {
+       ng_info(NG_VLEV2, "Got completion handle %p in %s", (void*)completion_handle, __func__);
+   }
+
+   ng_info(NG_VLEV2, "Setting compleated flag to false, completion_handle=%p", (void*)completion_handle);
+   completion_handle->completed = false;
+
+   if (req == NULL) {
+       ng_error("NULL request pointer passed to %s", __func__);
+       return -1;
+   }
+
+   ng_info(NG_VLEV2, "Setting request handle for caller");
+   *req = (NG_Request)completion_handle;
+
+   ng_info(NG_VLEV2, "Posting receive");
+   /* we only need to post a receive if we use the normal send mode 
+    * because only in this case the receiving peer have to do
+    * something ;) 
+    */
+   if (module_data.tran_mode == IBV_WR_SEND) {
+      
+      module_data.recv_list.addr          = (uintptr_t) module_data.buf;
+      module_data.recv_list.length        = size;
+      module_data.recv_list.lkey          = module_data.mr->lkey;
+      module_data.rwr.wr_id               = (int64_t)completion_handle;
+      module_data.rwr.sg_list             = &module_data.recv_list;
+      module_data.rwr.num_sge             = 1; 
+      module_data.rwr.next                = NULL;
+      if (module_data.tran_type == IBV_QPT_UD) {
+         module_data.recv_list.addr       = (uintptr_t) module_data.buf + 40;
+      }
+      if(ibv_post_recv(module_data.qp[src], &module_data.rwr, &bad_rwr)) {
+         ng_error("Couldn't post recv in %s", __func__);
+         return -1;
+      }
+
+   }
+
+   return size;
+}
+
+int ibv_test(NG_Request *req) {
+   // ng_info(NG_VLEV2, "ibv_test: testing request %p", (void*)(req ? *req : NULL));
+
+   if (req == NULL || *req == NULL) {
+       ng_error("NULL request pointer passed to %s", __func__);
+       return -1;
+   }
+
+   ibv_completion_handle_t* request_completion_handle = (ibv_completion_handle_t*)(*req);
+
+   int peer = request_completion_handle->peer;
+
+   while (true) {
+      struct ibv_wc wc;
+      int ne;
+
+      ne = ibv_poll_cq(module_data.cq[peer], 1, &wc);
+
+      // ng_info(NG_VLEV2, "ibv_test: poll returned ne=%d status=%d wr_id=0x%016llx", ne, wc.status, (unsigned long long)wc.wr_id);
+
+      if (ne == 0) {
+         // Nothing new in completion queue.
+         break;
+      }
+      
+      if (ne < 0) {
+         ng_error("Couldn*t poll completion queue");
+         return -1;
+      }
+      if (wc.status != IBV_WC_SUCCESS) {
+         ng_error("Completion with error: status %d and wr_id %d",
+                  wc.status, (int)wc.wr_id);
+         return -1;
+      }
+
+      ibv_completion_handle_t* completion_handle = (ibv_completion_handle_t*)wc.wr_id;
+      if (completion_handle != NULL) {
+         completion_handle->completed = true;
+      } else {
+         ng_info(NG_VLEV2, "ibv_test: WARNING: NULL completion handle in wr_id");
+      }
+   }
+   
+   if (request_completion_handle->completed) {
+      return 0; // completed
+   } else {
+      return 1; // not completed
+   }
+}
 
 /* do some cleanup */
 static void
@@ -593,24 +873,24 @@ ibv_shutdown(struct ng_options *global_opts) {
     */
    MPI_Barrier(module_data.mpi_comm);
    
-   ng_info(NG_VLEV1, "Beginning to release all IB data structures...");
+   // ng_info(NG_VLEV1, "Beginning to release all IB data structures...");
 
-   if(ibv_destroy_qp(module_data.qp))
-      ng_error("Couldn't destroy queue pair");
+   // if(ibv_destroy_qp(module_data.qp))
+   //    ng_error("Couldn't destroy queue pair");
    
-   if(ibv_destroy_cq(module_data.cq))
-      ng_error("Couldn't destroy completion queue");
+   // if(ibv_destroy_cq(module_data.cq))
+   //    ng_error("Couldn't destroy completion queue");
    
-   if(ibv_dereg_mr(module_data.mr))
-      ng_error("Couldn't release memory region");
+   // if(ibv_dereg_mr(module_data.mr))
+   //    ng_error("Couldn't release memory region");
 
-   if(ibv_dealloc_pd(module_data.pd))
-      ng_error("Couldn't dealloc protection domain");
+   // if(ibv_dealloc_pd(module_data.pd))
+   //    ng_error("Couldn't dealloc protection domain");
 
-   if(ibv_close_device(module_data.context))
-      ng_error("Couldn't close device");
+   // if(ibv_close_device(module_data.context))
+   //    ng_error("Couldn't close device");
       
-   ng_info(NG_VLEV1, "... finished releasing the IB stuff!");
+   // ng_info(NG_VLEV1, "... finished releasing the IB stuff!");
 }
 
 /* getopt long options for ibv */

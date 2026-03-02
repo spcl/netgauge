@@ -2,6 +2,7 @@
 #ifdef NG_MOD_LIBFABRIC
 
 #include "mod_libfabric.h"
+#include "hrtimer/hrtimer.h"
 
 #include <getopt.h>
 #include <inttypes.h>
@@ -15,6 +16,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+// To extract underlying queue pair parameters
+#include "infiniband/verbs.h" /* OFED stuff */
 
 #define CHECK(stmt)                                                   \
     do {                                                              \
@@ -40,6 +44,7 @@
         while (true) {                                                      \
             rc = (stmt);                                                    \
             if (rc == -FI_EAGAIN) {                                         \
+                fprintf(stderr, "%s:%d retrying with", __FILE__, __LINE__); \
                 continue;                                                   \
             } else if (rc < 0) {                                            \
                 fprintf(stderr, "%s:%d %s failed with %d (%s)\n", __FILE__, \
@@ -76,6 +81,32 @@
             fprintf(stderr, fmt, ##__VA_ARGS__); \
         }                                        \
     } while (0)
+
+#define VERBOSE_LOG_2(fmt, ...)                    \
+    do {                                         \
+        if (0) {                                 \
+            fprintf(stderr, fmt, ##__VA_ARGS__); \
+        }                                        \
+    } while (0)
+
+HRT_TIMESTAMP_T benchmark_start_2;
+
+uint64_t get_timestamp_ticks_2() {
+  HRT_TIMESTAMP_T now;
+  HRT_GET_TIMESTAMP(now);
+  uint64_t ticks;
+  HRT_GET_TIME(now, ticks);
+  return ticks;
+}
+
+double get_timestamp_usec_2() {
+  HRT_TIMESTAMP_T now;
+  HRT_GET_TIMESTAMP(now);
+  long long ticks;
+  HRT_GET_ELAPSED_TICKS(benchmark_start_2, now, &ticks);
+  double now_usec = HRT_GET_USEC(ticks);
+  return now_usec;
+}
 
 struct ng_module libfabric_module = {
     .name = "libfabric",
@@ -147,9 +178,26 @@ typedef struct {
     size_t nodes_no;                 /* number of nodes in the benchmark */
     size_t my_node_id;               /* this node's id */
     peer_info_t *peer_info;   /* info about all nodes */
+
+
 } libfabric_private_data_t;
 
 static libfabric_private_data_t module_data;
+
+// Returned by async operations as handle to check for completion
+typedef struct {
+    bool completed;
+    struct fid_cq *cq;
+} libfabric_completion_handle_t;
+
+#define MAX_HANDLES 1024
+
+libfabric_completion_handle_t* libfabric_get_completion_handle() {
+    static libfabric_completion_handle_t handles[MAX_HANDLES];
+    static int next_handle = 0;
+
+    return &handles[next_handle++ % MAX_HANDLES];
+}
 
 static int libfabric_getopt(int argc, char **argv, struct ng_options *global_opts) {
     char *optchars = "-M:";
@@ -208,6 +256,7 @@ struct fi_info *libfabric_get_info(const char *provider_name) {
     hints->caps = FI_MSG | FI_RMA | FI_READ | FI_REMOTE_READ;
     hints->domain_attr->mr_mode = FI_MR_LOCAL | FI_MR_VIRT_ADDR | FI_MR_ALLOCATED | FI_MR_PROV_KEY;
     hints->fabric_attr->prov_name = strdup(provider_name);
+    hints->tx_attr->op_flags |= FI_INJECT_COMPLETE;
     FI_CHECK(fi_getinfo(FI_VERSION(2, 0), NULL, NULL, 0, hints, &info));
     fi_freeinfo(hints);
     return info;
@@ -283,6 +332,8 @@ libfabric_connected_endpoint_t libfabric_connect_to_server(
         fprintf(stderr, "Unexpected event: %d\n", event);
         exit(1);
     }
+
+    VERBOSE_LOG("ep->fid.fclass = %u ?= %u\n", ep->fid.fclass, FI_CLASS_EP);
 
     // Create connected endpoint structure
     libfabric_connected_endpoint_t connected_ep;
@@ -425,8 +476,19 @@ int MPI_data_exchange(struct ng_options *global_opts,
 static int libfabric_init(struct ng_options *global_opts) {
     VERBOSE_LOG("Initializing libfabric module\n");
 
+    // setenv("FI_LOG_LEVEL", "INFO", 1);
+
+    // Log value of FI_VERBS_MIN_RNR_TIMER env variable
+    char *rnr_timer = getenv("FI_VERBS_MIN_RNR_TIMER");;
+    if (rnr_timer) {
+        VERBOSE_LOG("FI_VERBS_MIN_RNR_TIMER is set to %s\n", rnr_timer);
+    } else {
+        VERBOSE_LOG("FI_VERBS_MIN_RNR_TIMER is not set\n");
+    }
+
     // For now hardcoded
     module_data.provider_name = "verbs";
+    // module_data.provider_name = "TCP";
 
     // Initialize libfabric
     struct fi_info *info = libfabric_get_info(module_data.provider_name);
@@ -483,6 +545,9 @@ static int libfabric_init(struct ng_options *global_opts) {
     }
 
     VERBOSE_LOG("libfabric module initialized successfully\n");
+
+    HRT_GET_TIMESTAMP(benchmark_start_2);
+
     return 0;
 }
 
@@ -503,9 +568,13 @@ void libfabric_add_memory_region(
 }
 
 libfabric_memory_region_info_t *libfabric_get_memory_region_info(void *ptr) {
+    VERBOSE_LOG("Looking up memory region for pointer %p\n", ptr);
+
     libfabric_memory_region_info_t *current = module_data.memory_regions;
     while (current) {
-        if (current->start >= ptr && ptr <= current->start + current->length) {
+        VERBOSE_LOG("Checking memory region: start=%p, length=%zu\n", current->start, current->length);
+        VERBOSE_LOG("%p <= %p <= %p\n", current->start, ptr, current->start + current->length);
+        if (current->start <= ptr && ptr <= current->start + current->length) {
             return current;
         }
         current = current->next;
@@ -524,8 +593,8 @@ struct fid_mr *libfabric_register_memory_region(void *ptr, size_t size) {
     mr_attr.iov_count = 1;
     mr_attr.access = FI_REMOTE_READ | FI_READ | FI_SEND | FI_RECV;
 
-    // uint64_t key = ((uint64_t)rand() << 32) | rand();
-    // mr_attr.requested_key = key;
+    uint64_t key = ((uint64_t)rand() << 32) | rand();
+    mr_attr.requested_key = key;
 
     uint64_t flags = 0;
     FI_CHECK(fi_mr_regattr(module_data.network.domain, &mr_attr, flags, &mr));
@@ -573,96 +642,52 @@ void wait_for_completion(struct fid_cq *cq) {
     }
 }
 
-static int libfabric_sendto(int dst, void *buffer, int size) {
-    VERBOSE_LOG("Sending %d bytes to peer %d\n", size, dst);
+// Reads all completions from the completion queue. Every completion is supposed
+// to have a pointer to libfabric_completion_handle_t in a op_context field,
+// this pointer is used to mark the operation as completed.
+void read_all_completions(struct fid_cq *cq) {
+    static int pools_no = 0;
 
-    switch (module_data.rdma_operation) {
-        case 's': // send (send/recv)
-        {
-            // Get the memory region descriptor
-            void *desc = libfabric_get_memory_region_info(buffer)->desc;
+    while (true) {
+        struct fi_cq_data_entry comp;
+        int ret = fi_cq_read(cq, &comp, 1);
+        // VERBOSE_LOG_2("%d", module_data.my_node_id);
+        pools_no++;
+        if (ret > 0) {
+            // Completion detected, continue reading
 
-            RETRY_ON_EAGAIN(fi_send(
-                module_data.peer_connections[dst].ep,
-                buffer,
-                size,
-                desc,
-                FI_ADDR_UNSPEC,
-                NULL
-            ));
+            libfabric_completion_handle_t *handle =
+                (libfabric_completion_handle_t*)comp.op_context;
 
-            wait_for_completion(module_data.peer_connections[dst].cq);
+            //Mark comp as completed
+            if (handle != NULL) {
+                handle->completed = true;
+                double time_stamp = get_timestamp_usec_2();
+            VERBOSE_LOG_2("Read completion: "
+                      "op_context=%p, flags=0x%lx, len=%lu, "
+                      "buf=%p, data=%lu, pools_since_last=%d, time_stamp=%lu, node=%d\n",
+                      comp.op_context, comp.flags, comp.len, comp.buf,
+                      comp.data, pools_no, (unsigned long)time_stamp, module_data.my_node_id);
+                pools_no = 0;
+            } else {
+                fprintf(stderr, "Completion handle is NULL\n");
+                exit(1);
+            }
+
+            continue;
+        } else if (ret == -FI_EAGAIN) {
+            // No more completions available
             break;
-        }
-        case 'r': // RDMA read
-            RETRY_ON_EAGAIN(fi_read(
-                module_data.peer_connections[dst].ep,
-                module_data.local_buffer,
-                size,
-                module_data.local_descriptor,
-                /*peer_addres=*/0,
-                module_data.peer_info[dst].buffer_address,
-                module_data.peer_info[dst].buffer_key,
-                NULL
-            ));
-            wait_for_completion(module_data.peer_connections[dst].cq);
-            break;
-        case 'w': // RDMA write
-            RETRY_ON_EAGAIN(fi_write(
-                module_data.peer_connections[dst].ep,
-                module_data.local_buffer,
-                size,
-                module_data.local_descriptor,
-                /*peer_addres=*/0,
-                module_data.peer_info[dst].buffer_address,
-                module_data.peer_info[dst].buffer_key,
-                NULL
-            ));
-            wait_for_completion(module_data.peer_connections[dst].cq);
-            break;
-        default:
-            // Impossible, would cause an error in module initialization
+        } else if (ret == -FI_EAVAIL) {
+            int err_code;
+            PRINT_CQ_ERROR(cq, &err_code);
             exit(1);
-    }
-
-    // This is blocking and sends all data
-    return size;
-}
-
-static int libfabric_recvfrom(int src, void *buffer, int size) {
-    VERBOSE_LOG("Receiving %d bytes from peer %d\n", size, src);
-
-    switch (module_data.rdma_operation) {
-        case 's': // receive (send/recv)
-        {
-            // Get the memory region descriptor
-            void *desc = libfabric_get_memory_region_info(buffer)->desc;
-
-            FI_CHECK(fi_recv(
-                module_data.peer_connections[src].ep,
-                buffer,
-                size,
-                desc,
-                FI_ADDR_UNSPEC,
-                NULL
-            ));
-
-            wait_for_completion(module_data.peer_connections[src].cq);
-            break;
-        }
-        case 'r': // RDMA read
-            // Do nothing
-            break;
-        case 'w': // RDMA write
-            // Do nothing
-            break;
-        default:
-            // Impossible, would cause an error in module initialization
+        } else {
+            fprintf(stderr, "fi_cq_read failed: %d (%s)\n", ret,
+                    fi_strerror(-ret));
             exit(1);
+        }
     }
-
-    // This is blocking and receives all data
-    return size;
 }
 
 int libfabric_set_blocking(int fd, int blocking) {
@@ -676,20 +701,168 @@ static void libfabric_shutdown(struct ng_options *global_opts) {
 }
 
 static int libfabric_isendto(int dst, void *buffer, int size, NG_Request *req) {
-    // For now, isendto is blocking
-    libfabric_sendto(dst, buffer, size);
+    VERBOSE_LOG("Sending %d bytes to peer %d\n", size, dst);
+
+    libfabric_completion_handle_t *handle = libfabric_get_completion_handle();
+    handle->completed = false;
+    handle->cq = module_data.peer_connections[dst].cq;
+
+    *req = (NG_Request)handle;
+
+    switch (module_data.rdma_operation) {
+        case 's': // send (send/recv)
+        {
+            // Get the memory region descriptor
+            // void *desc = libfabric_get_memory_region_info(buffer)->desc;
+
+            RETRY_ON_EAGAIN(fi_send(
+                module_data.peer_connections[dst].ep,
+                // buffer,
+                module_data.local_buffer,
+                size,
+                // desc,
+                module_data.local_descriptor,
+                FI_ADDR_UNSPEC,
+                handle // context
+            ));
+            break;
+        }
+        case 'r': // RDMA read
+            RETRY_ON_EAGAIN(fi_read(
+                module_data.peer_connections[dst].ep,
+                module_data.local_buffer,
+                size,
+                module_data.local_descriptor,
+                /*peer_addres=*/0,
+                module_data.peer_info[dst].buffer_address,
+                module_data.peer_info[dst].buffer_key,
+                handle // context
+            ));
+            break;
+        case 'w': // RDMA write
+            RETRY_ON_EAGAIN(fi_write(
+                module_data.peer_connections[dst].ep,
+                module_data.local_buffer,
+                size,
+                module_data.local_descriptor,
+                /*peer_addres=*/0,
+                module_data.peer_info[dst].buffer_address,
+                module_data.peer_info[dst].buffer_key,
+                handle // context
+            ));
+            break;
+        default:
+            // Impossible, would cause an error in module initialization
+            exit(1);
+    }
+
+    // This is blocking and sends all data
     return size;
 }
 
 static int libfabric_irecvfrom(int src, void *buffer, int size, NG_Request *req) {
-    // For now, irecvfrom is blocking
-    libfabric_recvfrom(src, buffer, size);
+    VERBOSE_LOG("Receiving %d bytes from peer %d\n", size, src);
+
+    libfabric_completion_handle_t *handle = libfabric_get_completion_handle();
+
+    VERBOSE_LOG("Setting completion handle completed to false\n");
+    handle->completed = false;
+
+    VERBOSE_LOG("Setting completion cq pointer\n");
+    handle->cq = module_data.peer_connections[src].cq;
+
+    VERBOSE_LOG("Setting request handle for caller\n");    
+    *req = (NG_Request)handle;
+
+    switch (module_data.rdma_operation) {
+        case 's': // receive (send/recv)
+        {
+            // Get the memory region descriptor
+            VERBOSE_LOG("Getting memory region descriptor for buffer %p\n", buffer);
+            // libfabric_memory_region_info_t *mr_info = libfabric_get_memory_region_info(buffer);
+            // VERBOSE_LOG("mr_info=%p\n", mr_info);
+            
+            // void *desc = mr_info->desc;
+            // VERBOSE_LOG("desc=%p\n", desc);
+
+            VERBOSE_LOG("Retrieving endpoint for peer %d\n", src);
+            struct fid_ep *ep = module_data.peer_connections[src].ep;
+
+            VERBOSE_LOG("Posting fi_recv\n");
+            VERBOSE_LOG("ep=%p\n", ep);
+            VERBOSE_LOG("buffer=%p\n", buffer);
+            VERBOSE_LOG("size=%d\n", size);
+            // VERBOSE_LOG("desc=%p\n", desc);
+            VERBOSE_LOG("handle=%p\n", handle);
+            FI_CHECK(fi_recv(
+                ep,
+                // buffer,
+                module_data.local_buffer,
+                size,
+                // desc,
+                module_data.local_descriptor,
+                FI_ADDR_UNSPEC,
+                handle
+            ));
+
+            // wait_for_completion(module_data.peer_connections[src].cq);
+            break;
+        }
+        case 'r': // RDMA read
+            // Do nothing and mark as completed
+            VERBOSE_LOG("Marking RDMA read as completed\n");
+            handle->completed = true;
+            break;
+        case 'w': // RDMA write
+            // Do nothing and mark as completed
+            VERBOSE_LOG("Marking RDMA write as completed\n");
+            handle->completed = true;
+            break;
+        default:
+            // Impossible, would cause an error in module initialization
+            exit(1);
+    }
+
     return size;
 }
 
 static int libfabric_test(NG_Request *req) {
-    // for now isendto and irecvfrom are blocking, so there is nothing to wait for
-    return 0;
+    libfabric_completion_handle_t *handle = (libfabric_completion_handle_t *)(*req);
+
+    // // Read all completions from the CQ
+    read_all_completions(handle->cq);
+
+    if (handle->completed) {
+        return 0; // completed
+    } else {
+        return 1; // not completed
+    }
+
+    return 0; // Always completed in blocking implementation
+}
+
+static int libfabric_sendto(int dst, void *buffer, int size) {
+    NG_Request req;
+    libfabric_isendto(dst, buffer, size, &req);
+    
+    // Wait for completion
+    while (libfabric_test(&req) != 0) {
+        // Busy wait
+    }
+
+    return size;
+}
+
+static int libfabric_recvfrom(int src, void *buffer, int size) {
+    NG_Request req;
+    libfabric_irecvfrom(src, buffer, size, &req);
+    
+    // Wait for completion
+    while (libfabric_test(&req) != 0) {
+        // Busy wait
+    }
+
+    return size;
 }
 
 /* module registration */

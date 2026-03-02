@@ -724,7 +724,7 @@ class Parser {
 			fprintf(stderr, "Couldn't open input file %s: %s\n", filename, strerror(errno));
 			exit(EXIT_FAILURE);
 		} else {
-			fprintf(stderr, "Opened serialized schedule file %s\n", filename);
+			// fprintf(stderr, "Opened serialized schedule file %s\n", filename);
 		}
 
 		uint64_t magic_cookie = 0;

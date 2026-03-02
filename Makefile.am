@@ -3,6 +3,9 @@ bin_PROGRAMS = netgauge
 #CFLAGS = -O0
 #CXXFLAGS = -O0
 
+#AM_CFLAGS = -g -O0 -fno-omit-frame-pointer
+#AM_CXXFLAGS = -g -O0 -fno-omit-frame-pointer
+
 # hack to enable C++ and C mixture (link with CXX)
 CCLD=$(CXX) $(CXXFLAGS)
 

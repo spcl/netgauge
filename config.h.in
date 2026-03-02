@@ -134,8 +134,7 @@
 /* highrestimer resolution (ticks/sec) */
 #undef HRT_RESOLUTION
 
-/* Define to the sub-directory in which libtool stores uninstalled libraries.
-   */
+/* Define to the sub-directory where libtool stores uninstalled libraries. */
 #undef LT_OBJDIR
 
 /* enables the ARMCI module */
@@ -170,6 +169,9 @@
 
 /* module IBV (mod_ibv.c) */
 #undef NG_MOD_IBV
+
+/* module LIBFABRIC (mod_libfabric.c) */
+#undef NG_MOD_LIBFABRIC
 
 /* module LIBOF (mod_libof.c) */
 #undef NG_MOD_LIBOF
@@ -224,6 +226,9 @@
 
 /* pattern func_args (ptrn_func_args.cpp) */
 #undef NG_PTRN_FUNC_ARGS
+
+/* pattern goal (ptrn_goal.cpp) */
+#undef NG_PTRN_GOAL
 
 /* pattern loggp (ptrn_loggp.c) */
 #undef NG_PTRN_LOGGP

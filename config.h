@@ -133,7 +133,7 @@
 #define HRT_ARCH 2
 
 /* highrestimer resolution (ticks/sec) */
-#define HRT_RESOLUTION 2200213261
+#define HRT_RESOLUTION 2200202236
 
 /* Define to the sub-directory where libtool stores uninstalled libraries. */
 #define LT_OBJDIR ".libs/"
