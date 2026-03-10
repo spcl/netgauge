@@ -200,12 +200,13 @@ libfabric_completion_handle_t* libfabric_get_completion_handle() {
 }
 
 static int libfabric_getopt(int argc, char **argv, struct ng_options *global_opts) {
-    char *optchars = "-M:";
+    char *optchars = "-M:P:";
     int opt;
 
     extern char *optarg;
     extern int optind, opterr, optopt;
 
+    module_data.provider_name = "verbs";
     module_data.rdma_operation = 's'; // Default to 's' if -T not provided
 
     VERBOSE_LOG("Parsing command-line options for libfabric module\n");
@@ -226,6 +227,9 @@ static int libfabric_getopt(int argc, char **argv, struct ng_options *global_opt
                     exit(1);
                 }
                 break;
+            case 'P':
+                module_data.provider_name = optarg;
+                break;
             case '?':
                 // fprintf(stderr, "Unknown option '-%c'\n", optopt);
                 continue; // Ignore unrecognized options
@@ -242,7 +246,9 @@ static void libfabric_writemanpage(void) {
 }
 
 static void libfabric_usage(void) {
-    return; // TODO: implement libfabric version
+    printf("libfabric module options:\n");
+    printf("  -M <mode>      RDMA operation mode: 's' (send), 'w' (write), 'r' (read)\n");
+    printf("  -P <provider>  libfabric provider name (e.g., 'verbs', 'tcp')\n");
 }
 
 struct fi_info *libfabric_get_info(const char *provider_name) {
@@ -487,7 +493,6 @@ static int libfabric_init(struct ng_options *global_opts) {
     }
 
     // For now hardcoded
-    module_data.provider_name = "verbs";
     // module_data.provider_name = "TCP";
 
     // Initialize libfabric
