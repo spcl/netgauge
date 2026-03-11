@@ -12,6 +12,7 @@
 #include <rdma/fi_endpoint.h>
 #include <rdma/fi_errno.h>
 #include <rdma/fi_rma.h>
+#include <rdma/fi_tagged.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
