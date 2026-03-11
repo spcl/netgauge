@@ -356,7 +356,16 @@ static int libfabric_cl_init(struct ng_options *global_opts) {
     // Create the vector address for peers
     module_data.peer_addrs = malloc(sizeof(fi_addr_t) * module_data.nodes_no);
     for (size_t i = 0; i < module_data.nodes_no; i++) {
-        FI_CHECK(fi_av_insert(module_data.av, module_data.peer_info[i].address.bytes, 1, &module_data.peer_addrs[i], 0, NULL));
+        int rc = fi_av_insert(module_data.av, module_data.peer_info[i].address.bytes, 1, &module_data.peer_addrs[i], 0, NULL);
+        if (rc < 0) {
+            fprintf(stderr, "%s:%d fi_av_insert failed with %d (%s)\n", __FILE__,
+                    __LINE__, rc, fi_strerror(-rc));
+            exit(1);
+        } else if (rc != 1) {
+            fprintf(stderr, "%s:%d fi_av_insert failed to insert address (returned %d instead of 1)\n",
+                    __FILE__, __LINE__, rc);
+            exit(1);
+        }
     }
 
     VERBOSE_LOG("libfabric_cl module initialized successfully\n");
