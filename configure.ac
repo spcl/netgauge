@@ -152,6 +152,7 @@ HTOR_CHECK_MODULE(SCI,mod_sci.c,NG_MOD_SCI)
 HTOR_CHECK_MODULE(CELL,mod_cell.c,NG_MOD_CELL)
 HTOR_CHECK_MODULE(MX,mod_mx.c,NG_MOD_MX)
 HTOR_CHECK_MODULE(LIBFABRIC,mod_libfabric.c,NG_MOD_LIBFABRIC)
+HTOR_CHECK_MODULE(LIBFABRIC_CL,mod_libfabric_connectionless.c,NG_MOD_LIBFABRIC_CONNECTIONLESS)
 
 AC_MSG_NOTICE([**** checking if Netgauge patterns compile ****])
 HTOR_CHECK_PATTERN(distrtt,ptrn_distrtt.c,NG_PTRN_DISTRTT)

@@ -112,6 +112,7 @@ extern void register_armci(void);
 extern void register_cell(void);
 extern void register_mx(void);
 extern void register_libfabric(void);
+extern void register_libfabric_cl(void);
 
 /* function prototypes */
 void ng_usage(char *mode);
@@ -151,6 +152,7 @@ int main(int argc, char **argv) {
   register_cell();    /* cell dma transfer (no effect if NG_CELL is not defined) */
   register_mx();    /* Myrinet Express or the ABI compatible OpenMX low level commlib */
   register_libfabric(); /* libfabric module */
+  register_libfabric_cl(); /* libfabric connectionless module */
 
   /* register communication pattern modules */
   register_pattern_overlap();
