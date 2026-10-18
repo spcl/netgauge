@@ -647,6 +647,9 @@ ibv_sendto(int dst, void *buffer, int size) {
    module_data.wr.num_sge              = 1;
    module_data.wr.opcode               = module_data.tran_mode;
    module_data.wr.send_flags           = IBV_SEND_SIGNALED;
+   if (size <= MAX_INLINE && module_data.tran_mode != IBV_WR_RDMA_READ) {
+      module_data.wr.send_flags |= IBV_SEND_INLINE;
+   }
    module_data.wr.next                 = NULL;
    /* set some extra stuff for RDMA mode */
    if (module_data.tran_mode != IBV_WR_SEND && 
@@ -780,6 +783,9 @@ ibv_isendto(int dst, void *buffer, int size, NG_Request *req) {
    module_data.wr.num_sge              = 1;
    module_data.wr.opcode               = module_data.tran_mode;
    module_data.wr.send_flags           = IBV_SEND_SIGNALED;
+   if (size <= MAX_INLINE && module_data.tran_mode != IBV_WR_RDMA_READ) {
+      module_data.wr.send_flags |= IBV_SEND_INLINE;
+   }
    module_data.wr.next                 = NULL;
    /* set some extra stuff for RDMA mode */
    if (module_data.tran_mode != IBV_WR_SEND && 
