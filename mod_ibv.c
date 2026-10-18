@@ -219,8 +219,8 @@ ibv_init (struct ng_options *global_opts) {
    module_data.mpi_size     = global_opts->mpi_opts->worldsize;
    module_data.mpi_rank     = global_opts->mpi_opts->worldrank;
                
-   /* FIXME size of the transmission queue */
-   module_data.tx_depth = 100;
+   /* Size of transmission queue (matching Libfabric default 384) */
+   module_data.tx_depth = 384;
   
    /* get the list with the available hcas */
    module_data.dev_list = ibv_get_device_list(NULL);
@@ -328,7 +328,7 @@ ibv_init (struct ng_options *global_opts) {
       /* Work around from OFED perftest write_bw:  
        * driver doesnt support
        * recv_wr = 0 */
-      initattr.cap.max_recv_wr  = 100;
+      initattr.cap.max_recv_wr  = module_data.tx_depth;
       initattr.cap.max_send_sge = 1;
       initattr.cap.max_recv_sge = 1;
       initattr.cap.max_inline_data = MAX_INLINE;

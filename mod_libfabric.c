@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 // To extract underlying queue pair parameters
 #include "infiniband/verbs.h" /* OFED stuff */
@@ -114,7 +115,7 @@ struct ng_module libfabric_module = {
     .name = "libfabric",
     .desc = "This mod uses libfabric for data transmission.",
     .flags = NG_MOD_RELIABLE | NG_MOD_CHANNEL,
-    .max_datasize = -1, /*  can send data of arbitrary size */
+    .max_datasize = 256 * 1024 * 1024, /* 256 MB, matching mod_ibv */
     .headerlen = 0,     /*  no extra space needed for header */
     .malloc = libfabric_malloc,
     .getopt = libfabric_getopt,
@@ -270,6 +271,9 @@ struct fi_info *libfabric_get_info(const char *provider_name) {
     hints->domain_attr->mr_mode = FI_MR_LOCAL | FI_MR_VIRT_ADDR | FI_MR_ALLOCATED | FI_MR_PROV_KEY;
     hints->fabric_attr->prov_name = strdup(provider_name);
     hints->tx_attr->op_flags |= FI_INJECT_COMPLETE;
+    hints->tx_attr->inject_size = 256;
+    hints->tx_attr->size = 384;
+    hints->rx_attr->size = 384;
     FI_CHECK(fi_getinfo(FI_VERSION(2, 0), NULL, NULL, 0, hints, &info));
     fi_freeinfo(hints);
     // fprintf(stderr, "Provider: %s\n", info->fabric_attr->prov_name);
@@ -317,7 +321,7 @@ libfabric_connected_endpoint_t libfabric_connect_to_server(
 
     // Create and bind completion queue
     struct fid_cq *cq;
-    struct fi_cq_attr cq_attr = {.format = FI_CQ_FORMAT_DATA};
+    struct fi_cq_attr cq_attr = {.format = FI_CQ_FORMAT_DATA, .size = 384};
     FI_CHECK(fi_cq_open(network->domain, &cq_attr, &cq, NULL));
     FI_CHECK(fi_ep_bind(ep, &cq->fid,
                         FI_TRANSMIT | FI_RECV));  // TODO: correct flags
@@ -434,7 +438,7 @@ libfabric_connected_endpoint_t libfabric_accept_connection(
 
             // Create and bind completion queue
             struct fid_cq *cq;
-            struct fi_cq_attr cq_attr = {.format = FI_CQ_FORMAT_DATA};
+            struct fi_cq_attr cq_attr = {.format = FI_CQ_FORMAT_DATA, .size = 384};
             FI_CHECK(fi_cq_open(network->domain, &cq_attr, &cq, NULL));
             FI_CHECK(fi_ep_bind(ep, &cq->fid,
                                 FI_TRANSMIT | FI_RECV));  // TODO: correct flags
@@ -523,15 +527,20 @@ static int libfabric_init(struct ng_options *global_opts) {
     libfabric_listening_endpoint_t listening_endpoint =
         libfabric_create_listening_endpoint(&module_data.network);
 
-    // Alloc internal buffers
-    module_data.internal_buffer_size = 16777216;
+    // Alloc internal buffers (256 MB, matching mod_ibv)
+    module_data.internal_buffer_size = 256UL * 1024 * 1024;
 
-    module_data.local_buffer = malloc(module_data.internal_buffer_size);
+    size_t page_size = (size_t) sysconf(_SC_PAGESIZE);
+    CHECK(posix_memalign(&module_data.local_buffer, page_size, module_data.internal_buffer_size) == 0);
+    memset(module_data.local_buffer, 0, module_data.internal_buffer_size);
+
     module_data.local_mr = libfabric_register_memory_region(
         module_data.local_buffer, module_data.internal_buffer_size);
     module_data.local_descriptor = fi_mr_desc(module_data.local_mr);
 
-    module_data.remote_operation_buffer = malloc(module_data.internal_buffer_size);
+    CHECK(posix_memalign(&module_data.remote_operation_buffer, page_size, module_data.internal_buffer_size) == 0);
+    memset(module_data.remote_operation_buffer, 0, module_data.internal_buffer_size);
+
     module_data.remote_mr = libfabric_register_memory_region(
         module_data.remote_operation_buffer, module_data.internal_buffer_size);
     module_data.remote_operation_descriptor = fi_mr_desc(module_data.remote_mr);

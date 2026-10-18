@@ -63,7 +63,7 @@ static struct ibv_private_data {
    int                  tx_depth;      /* number of elements in the completion queue */
 } module_data;
 
-#define MAX_INLINE 400                 /* FIXME: Where or what is the right value for this? */
+#define MAX_INLINE 256                 /* Set to 256 to match Libfabric default inline size */
                                        /* we use it for setting the initial attributes of the qp */
 #endif
 /* vim: set expandtab tabstop=3 shiftwidth=3 autoindent smartindent: */
