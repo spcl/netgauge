@@ -240,7 +240,7 @@ static void one_one_do_benchmarks(struct ng_module *module) {
           unsigned long long tibl, tirtt;
   
           /* init statistics (TODO: what does this do?) */
-          ng_statistics_test_begin(&statistics);
+          // ng_statistics_test_begin(&statistics);
 
           HRT_GET_TIMESTAMP(t[0]);
 
