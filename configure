@@ -18882,6 +18882,32 @@ fi
 rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
 
 
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking module LIBFABRIC_CL" >&5
+$as_echo_n "checking module LIBFABRIC_CL... " >&6; }
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+#define NG_MOD_LIBFABRIC_CONNECTIONLESS
+#include "mod_libfabric_connectionless.c"
+
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define NG_MOD_LIBFABRIC_CONNECTIONLESS 1" >>confdefs.h
+
+
+else
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+
+
 { $as_echo "$as_me:${as_lineno-$LINENO}: **** checking if Netgauge patterns compile ****" >&5
 $as_echo "$as_me: **** checking if Netgauge patterns compile ****" >&6;}
 

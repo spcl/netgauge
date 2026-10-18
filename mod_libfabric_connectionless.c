@@ -3,6 +3,7 @@
 
 #include "mod_libfabric_connectionless.h"
 #include "hrtimer/hrtimer.h"
+#include "papi_simple.h"
 
 #include <getopt.h>
 #include <inttypes.h>
@@ -33,8 +34,8 @@
     do {                                                                \
         int rc = (stmt);                                                \
         if (rc) {                                                       \
-            fprintf(stderr, "%s:%d %s failed with %d (%s)\n", __FILE__, \
-                    __LINE__, #stmt, rc, fi_strerror(-rc));             \
+            fprintf(stderr, "%s:%d %s failed with %d (%s) (node %d)\n", __FILE__,     \
+                    __LINE__, #stmt, rc, fi_strerror(-rc), module_data.my_node_id);                 \
             exit(1);                                                    \
         }                                                               \
     } while (0)
@@ -45,19 +46,20 @@
         while (true) {                                                      \
             rc = (stmt);                                                    \
             if (rc == -FI_EAGAIN) {                                         \
-                fprintf(stderr, "%s:%d retrying with", __FILE__, __LINE__); \
+                /* sleep(1);      */                                             \
+                /*fprintf(stderr, "%s:%d retrying with", __FILE__, __LINE__); */ \
                 continue;                                                   \
             } else if (rc < 0) {                                            \
-                fprintf(stderr, "%s:%d %s failed with %d (%s)\n", __FILE__, \
-                        __LINE__, #stmt, rc, fi_strerror(-rc));             \
+                fprintf(stderr, "%s:%d %s failed with %d (%s) (node %d)\n", __FILE__,     \
+                        __LINE__, #stmt, rc, fi_strerror(-rc), module_data.my_node_id);                 \
                 exit(1);                                                    \
             }                                                               \
             break;                                                          \
         }                                                                   \
         if (rc) {                                                           \
             /* If we stop trying then report the last error */              \
-            fprintf(stderr, "%s:%d %s failed with %d (%s)\n", __FILE__,     \
-                    __LINE__, #stmt, rc, fi_strerror(-rc));                 \
+            fprintf(stderr, "%s:%d %s failed with %d (%s) (node %d)\n", __FILE__,     \
+                    __LINE__, #stmt, rc, fi_strerror(-rc), module_data.my_node_id);                 \
             exit(1);                                                        \
         }                                                                   \
     } while (0)
@@ -319,7 +321,7 @@ static int libfabric_cl_init(struct ng_options *global_opts) {
     FI_CHECK(fi_endpoint(module_data.network.domain, info, &module_data.ep, NULL));
 
     // Create CQ
-    struct fi_cq_attr cq_attr = {.format = FI_CQ_FORMAT_DATA};
+    struct fi_cq_attr cq_attr = {.format = FI_CQ_FORMAT_DATA, .size = 1024};
     FI_CHECK(fi_cq_open(module_data.network.domain, &cq_attr, &module_data.cq, NULL));
     FI_CHECK(fi_ep_bind(module_data.ep, &module_data.cq->fid, FI_TRANSMIT | FI_RECV));
 
@@ -537,6 +539,8 @@ static int libfabric_cl_isendto(int dst, void *buffer, int size, NG_Request *req
     switch (module_data.rdma_operation) {
         case 's': // send (send/recv)
         {
+            VERBOSE_LOG_2("Posting fi_tsend (node %d)\n", module_data.my_node_id);
+
             RETRY_ON_EAGAIN(fi_tsend(
                 module_data.ep,
                 module_data.local_buffer,
@@ -598,7 +602,7 @@ static int libfabric_cl_irecvfrom(int src, void *buffer, int size, NG_Request *r
     switch (module_data.rdma_operation) {
         case 's': // receive (send/recv)
         {
-            VERBOSE_LOG("Posting fi_trecv\n");
+            VERBOSE_LOG_2("Posting fi_trecv (node %d)\n", module_data.my_node_id);
             FI_CHECK(fi_trecv(
                 module_data.ep,
                 module_data.local_buffer,

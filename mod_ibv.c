@@ -17,6 +17,7 @@
 
 #include "infiniband/verbs.h" /* OFED stuff */
 #include "mod_ibv.h"
+#include "papi_simple.h"
 
 #include <string.h>
 #include <stdbool.h>
@@ -29,6 +30,9 @@
     } while (0)
 
 extern struct ng_options g_options;
+
+/* static variable to store output file for cycle measurements */
+static char *ibv_output_file = NULL;
 
 /* module registration data structure */
 static struct ng_module ibv_module = {
@@ -72,7 +76,7 @@ ibv_completion_handle_t* ibv_get_completion_handle() {
 static int 
 ibv_getopt(int argc, char **argv, struct ng_options *global_opts) {
    int c;
-   char *optchars = "-T:M:";
+   char *optchars = "-T:M:O:";
    extern char *optarg;
    extern int optind, opterr, optopt;
 
@@ -156,6 +160,20 @@ ibv_getopt(int argc, char **argv, struct ng_options *global_opts) {
             return 1;
          } /* -M switch */
          break; /* case 'M' */
+      case 'O':   /* set output file for cycle measurements */
+         if (optarg) {
+            ibv_output_file = malloc(strlen(optarg) + 1);
+            if (!ibv_output_file) {
+               ng_error("Couldn't allocate memory for output filename");
+               return 1;
+            }
+            strcpy(ibv_output_file, optarg);
+            ng_info(NG_VLEV2, "Setting output file to: %s", ibv_output_file);
+         } else {
+            ng_error("Option -O requires a filename argument");
+            return 1;
+         }
+         break;
       default:
          continue;
          ng_error("We got an unspecified argument in %s", __func__);
@@ -355,6 +373,12 @@ ibv_init (struct ng_options *global_opts) {
       module_data.qp[i] = qp;
    }
 
+   // Init PAPI for cycle measurements if cycles output file was specified
+   if (ibv_output_file) {
+      printf(stderr, "Initializing PAPI for cycle measurements, output file: %s\n", ibv_output_file);
+      papi_simple_init();
+   }
+
    /* TODO: merge functions! */
    return ibv_setup_channels();                                                                                                                               
 }
@@ -470,7 +494,7 @@ static int ibv_setup_channels(void) {
 
       /* transit the queue pair to ReadyToReceive state */
       qpattr.qp_state = IBV_QPS_RTR;
-      qpattr.path_mtu = IBV_MTU_2048; /* FIXME: add this as a parameter */
+      qpattr.path_mtu = IBV_MTU_4096; /* FIXME: add this as a parameter */
       qpattr.dest_qp_num = module_data.rqp_num[i];
       qpattr.rq_psn = module_data.rpsn[i];
 
@@ -481,7 +505,7 @@ static int ibv_setup_channels(void) {
       qpattr.ah_attr.port_num   = 1; /* FIXME no static port */
 
       if (module_data.tran_type == IBV_QPT_RC) {
-         qpattr.max_dest_rd_atomic     = 1;
+         qpattr.max_dest_rd_atomic     = 16;
          qpattr.min_rnr_timer          = 12;
          if(ibv_modify_qp(module_data.qp[i], &qpattr,
                            IBV_QP_STATE               |
@@ -519,10 +543,10 @@ static int ibv_setup_channels(void) {
       qpattr.qp_state = IBV_QPS_RTS;
       qpattr.sq_psn = module_data.lpsn[i];
       if (module_data.tran_type == IBV_QPT_RC) {
-         qpattr.timeout       = 14;
+         qpattr.timeout       = 19;
          qpattr.retry_cnt     = 7;
          qpattr.rnr_retry     = 7;
-         qpattr.max_rd_atomic = 1;
+         qpattr.max_rd_atomic = 16;
          if(ibv_modify_qp(module_data.qp[i], &qpattr,
                            IBV_QP_STATE              |
                            IBV_QP_SQ_PSN             |
@@ -638,10 +662,20 @@ ibv_sendto(int dst, void *buffer, int size) {
       module_data.wr.wr.ud.remote_qkey = 0x11111111;
    }
    ng_info(NG_VLEV2, "ibv_sendto: posting send");
+
+   papi_simple_start();
+
    if(ibv_post_send(module_data.qp[dst], &module_data.wr, &bad_wr)) {
+
+      papi_simple_stop_and_ignore();
+
       ng_error("Couldn't post send in %s", __func__);
       return -1;
    }
+
+   // 'S' tag for send.
+   papi_simple_stop_and_save('S');
+
    ng_info(NG_VLEV2, "ibv_sendto: posted send, polling cq");
    
    do {
@@ -685,10 +719,20 @@ ibv_recvfrom(int src, void *buffer, int size) {
       if (module_data.tran_type == IBV_QPT_UD) {
          module_data.recv_list.addr       = (uintptr_t) module_data.buf + 40;
       }
+
+      papi_simple_start();
+
       if(ibv_post_recv(module_data.qp[src], &module_data.rwr, &bad_rwr)) {
+
+         papi_simple_stop_and_ignore();
+
          ng_error("Couldn't post recv in %s", __func__);
          return -1;
       }
+
+      // 'R' tag for receive.
+      papi_simple_stop_and_save('R');
+
       
       do {
          ne = ibv_poll_cq(module_data.cq[src], 1, &wc);
@@ -750,10 +794,19 @@ ibv_isendto(int dst, void *buffer, int size, NG_Request *req) {
       module_data.wr.wr.ud.remote_qpn  = module_data.rqp_num[dst];
       module_data.wr.wr.ud.remote_qkey = 0x11111111;
    }
+
+   papi_simple_start();
+
    if(ibv_post_send(module_data.qp[dst], &module_data.wr, &bad_wr)) {
+
+      papi_simple_stop_and_ignore();
+
       ng_error("Couldn't post send in %s", __func__);
       return -1;
    }
+
+   // 'S' tag for send.
+   papi_simple_stop_and_save('S');
 
    return size;
 }
@@ -804,10 +857,19 @@ ibv_irecvfrom(int src, void *buffer, int size, NG_Request *req) {
       if (module_data.tran_type == IBV_QPT_UD) {
          module_data.recv_list.addr       = (uintptr_t) module_data.buf + 40;
       }
+
+      papi_simple_start();
+
       if(ibv_post_recv(module_data.qp[src], &module_data.rwr, &bad_rwr)) {
+
+         papi_simple_stop_and_ignore();
+
          ng_error("Couldn't post recv in %s", __func__);
          return -1;
       }
+
+      // 'R' tag for receive.
+      papi_simple_stop_and_save('R');
 
    }
 
@@ -891,12 +953,15 @@ ibv_shutdown(struct ng_options *global_opts) {
    //    ng_error("Couldn't close device");
       
    // ng_info(NG_VLEV1, "... finished releasing the IB stuff!");
+
+   papi_simple_print_and_clear(ibv_output_file);
 }
 
 /* getopt long options for ibv */
 static struct option long_options_ibv[]={
         {"transtype",	required_argument, 0, 'T'},
         {"transmode",	required_argument, 0, 'M'},
+        {"output",	required_argument, 0, 'O'},
         {0, 0, 0, 0}
 };
 
@@ -906,6 +971,7 @@ static struct option_info long_option_infos_ibv[]={
           "[U]nreliable datagram", "[u]|[r]|[U]"},
          {"transport mode normal [s]end, RDMA [w]rite or " 
           "[r]read", "[s]|[w]|[r]"},
+         {"output file for cycle measurements", "filename"},
          {0, 0}
 };
 

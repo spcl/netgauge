@@ -173,6 +173,9 @@
 /* module LIBFABRIC (mod_libfabric.c) */
 #undef NG_MOD_LIBFABRIC
 
+/* module LIBFABRIC_CL (mod_libfabric_connectionless.c) */
+#undef NG_MOD_LIBFABRIC_CONNECTIONLESS
+
 /* module LIBOF (mod_libof.c) */
 #undef NG_MOD_LIBOF
 

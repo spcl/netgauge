@@ -123,10 +123,10 @@ am_netgauge_OBJECTS = mod_eth.$(OBJEXT) mod_ib.$(OBJEXT) \
 	mod_sci.$(OBJEXT) ptrn_distrtt.$(OBJEXT) mod_cell.$(OBJEXT) \
 	mod_cell_dma.$(OBJEXT) mod_cell_dmalist.$(OBJEXT) \
 	mod_cell_mail.$(OBJEXT) mod_libof.$(OBJEXT) \
-	mod_libfabric.$(OBJEXT) ptrn_nbov.$(OBJEXT) \
-	netgauge_cmdline.$(OBJEXT) ptrn_noise.$(OBJEXT) \
-	ptrn_noise_cmdline.$(OBJEXT) ng_sync.$(OBJEXT) \
-	ptrn_collvsnoise_cmdline.$(OBJEXT) \
+	mod_libfabric.$(OBJEXT) mod_libfabric_connectionless.$(OBJEXT) \
+	ptrn_nbov.$(OBJEXT) netgauge_cmdline.$(OBJEXT) \
+	ptrn_noise.$(OBJEXT) ptrn_noise_cmdline.$(OBJEXT) \
+	ng_sync.$(OBJEXT) ptrn_collvsnoise_cmdline.$(OBJEXT) \
 	ptrn_mprobe_cmdline.$(OBJEXT) ptrn_memory_cmdline.$(OBJEXT) \
 	ptrn_disk_cmdline.$(OBJEXT) ptrn_ebb_cmdline.$(OBJEXT) \
 	getopt_long.$(OBJEXT) rpl_alloc.$(OBJEXT) \
@@ -161,6 +161,7 @@ am__depfiles_remade = ./$(DEPDIR)/cpustat.Po ./$(DEPDIR)/fullresult.Po \
 	./$(DEPDIR)/mod_enet_esp.Po ./$(DEPDIR)/mod_eth.Po \
 	./$(DEPDIR)/mod_gm.Po ./$(DEPDIR)/mod_ib.Po \
 	./$(DEPDIR)/mod_ibv.Po ./$(DEPDIR)/mod_libfabric.Po \
+	./$(DEPDIR)/mod_libfabric_connectionless.Po \
 	./$(DEPDIR)/mod_libof.Po ./$(DEPDIR)/mod_mpi.Po \
 	./$(DEPDIR)/mod_mx.Po ./$(DEPDIR)/mod_sci.Po \
 	./$(DEPDIR)/mod_tcp.Po ./$(DEPDIR)/mod_udp.Po \
@@ -441,7 +442,7 @@ netgauge_SOURCES = mod_eth.c \
 	ptrn_loggp.c \
 	mod_armci.c mod_sci.c ptrn_distrtt.c \
 	mod_cell.c mod_cell_dma.c mod_cell_dmalist.c mod_cell_mail.c  \
-	mod_libof.c mod_libfabric.c \
+	mod_libof.c mod_libfabric.c mod_libfabric_connectionless.c \
 	ptrn_nbov.c netgauge_cmdline.c \
 	ptrn_noise.c ptrn_noise_cmdline.c ng_sync.c \
 	ptrn_collvsnoise_cmdline.c ptrn_mprobe_cmdline.c ptrn_memory_cmdline.c ptrn_disk_cmdline.c ptrn_ebb_cmdline.c \
@@ -452,7 +453,7 @@ netgauge_CPPOBJECTS = ptrn_one_one.o ptrn_one_one_perturb.o ptrn_one_one_sync.o 
 noinst_HEADERS = af_enet.h cpustat.h netgauge.h fullresult.h librecv_dynsize.h \
 	statistics.h mod_inet.h mod_enet.h iba.h iba_openib.h getopt.h llscript.ll \
 	iba_vapi.h mod_cell.h mod_cell_task.h eth_helpers.h mod_ibv.h mod_ib.h \
-	mod_libfabric.h Parser.hpp LogGOPSim.hpp \
+	mod_libfabric.h mod_libfabric_connectionless.h Parser.hpp LogGOPSim.hpp \
 	hrtimer/getres.c hrtimer/sanity-check.c hrtimer/calibrate.h hrtimer/ppc-gcc-tb.h hrtimer/x86_32-gcc-rdtsc.h hrtimer/mpi-wtime.h \
 	hrtimer/x86_64-gcc-rdtsc.h hrtimer/hrtimer.h ng_tools.hpp mersenne/MersenneTwister.h hrtimer/ia64-gcc-itc.h hrtimer/mips64-sicortex-gcc.h \
 	ptrn_noise_cmdline.h ptrn_noise.h netgauge_cmdline.h ptrn_collvsnoise_cmdline.h ng_sync.h ptrn_beff_cmdline.h ptrn_memory_cmdline.h ptrn_disk_cmdline.h \
@@ -594,6 +595,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mod_ib.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mod_ibv.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mod_libfabric.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mod_libfabric_connectionless.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mod_libof.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mod_mpi.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mod_mx.Po@am__quote@ # am--include-marker
@@ -1017,6 +1019,7 @@ distclean: distclean-recursive
 	-rm -f ./$(DEPDIR)/mod_ib.Po
 	-rm -f ./$(DEPDIR)/mod_ibv.Po
 	-rm -f ./$(DEPDIR)/mod_libfabric.Po
+	-rm -f ./$(DEPDIR)/mod_libfabric_connectionless.Po
 	-rm -f ./$(DEPDIR)/mod_libof.Po
 	-rm -f ./$(DEPDIR)/mod_mpi.Po
 	-rm -f ./$(DEPDIR)/mod_mx.Po
@@ -1103,6 +1106,7 @@ maintainer-clean: maintainer-clean-recursive
 	-rm -f ./$(DEPDIR)/mod_ib.Po
 	-rm -f ./$(DEPDIR)/mod_ibv.Po
 	-rm -f ./$(DEPDIR)/mod_libfabric.Po
+	-rm -f ./$(DEPDIR)/mod_libfabric_connectionless.Po
 	-rm -f ./$(DEPDIR)/mod_libof.Po
 	-rm -f ./$(DEPDIR)/mod_mpi.Po
 	-rm -f ./$(DEPDIR)/mod_mx.Po

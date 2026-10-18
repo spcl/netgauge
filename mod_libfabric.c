@@ -3,6 +3,7 @@
 
 #include "mod_libfabric.h"
 #include "hrtimer/hrtimer.h"
+#include "papi_simple.h"
 
 #include <getopt.h>
 #include <inttypes.h>
@@ -90,6 +91,7 @@
     } while (0)
 
 HRT_TIMESTAMP_T benchmark_start_2;
+static char *cycles_output_file = NULL;
 
 uint64_t get_timestamp_ticks_2() {
   HRT_TIMESTAMP_T now;
@@ -199,8 +201,9 @@ libfabric_completion_handle_t* libfabric_get_completion_handle() {
     return &handles[next_handle++ % MAX_HANDLES];
 }
 
+
 static int libfabric_getopt(int argc, char **argv, struct ng_options *global_opts) {
-    char *optchars = "-M:P:";
+    char *optchars = "-M:P:O:";
     int opt;
 
     extern char *optarg;
@@ -230,6 +233,9 @@ static int libfabric_getopt(int argc, char **argv, struct ng_options *global_opt
             case 'P':
                 module_data.provider_name = optarg;
                 break;
+            case 'O':
+                cycles_output_file = optarg;
+                break;
             case '?':
                 // fprintf(stderr, "Unknown option '-%c'\n", optopt);
                 continue; // Ignore unrecognized options
@@ -249,6 +255,7 @@ static void libfabric_usage(void) {
     printf("libfabric module options:\n");
     printf("  -M <mode>      RDMA operation mode: 's' (send), 'w' (write), 'r' (read)\n");
     printf("  -P <provider>  libfabric provider name (e.g., 'verbs', 'tcp')\n");
+    printf("  -O <file>      output file for cycles counting\n");
 }
 
 struct fi_info *libfabric_get_info(const char *provider_name) {
@@ -265,6 +272,7 @@ struct fi_info *libfabric_get_info(const char *provider_name) {
     hints->tx_attr->op_flags |= FI_INJECT_COMPLETE;
     FI_CHECK(fi_getinfo(FI_VERSION(2, 0), NULL, NULL, 0, hints, &info));
     fi_freeinfo(hints);
+    // fprintf(stderr, "Provider: %s\n", info->fabric_attr->prov_name);
     return info;
 }
 
@@ -441,6 +449,20 @@ libfabric_connected_endpoint_t libfabric_accept_connection(
             FI_CHECK(fi_accept(ep, NULL, 0));
             VERBOSE_LOG("Connection accepted\n");
 
+            // Wait for connection completion (FI_CONNECTED) on child endpoint EQ
+            rd = fi_eq_sread(eq, &event, &entry, sizeof entry, -1, 0);
+            if (rd < 0) {
+                fprintf(stderr, "fi_eq_sread failed on server: %zd (%s)\n", rd,
+                    fi_strerror(-rd));
+                exit(1);
+            }
+            if (event == FI_CONNECTED) {
+                VERBOSE_LOG("Connected to client successfully\n");
+            } else {
+                fprintf(stderr, "Unexpected event on server: %d\n", event);                                                                                                        
+                exit(1);
+            }
+
             // Return the connected endpoint
             libfabric_connected_endpoint_t connected_ep;
             connected_ep.ep = ep;
@@ -552,6 +574,10 @@ static int libfabric_init(struct ng_options *global_opts) {
     VERBOSE_LOG("libfabric module initialized successfully\n");
 
     HRT_GET_TIMESTAMP(benchmark_start_2);
+
+    if (cycles_output_file) {
+        papi_simple_init();
+    }
 
     return 0;
 }
@@ -700,8 +726,50 @@ int libfabric_set_blocking(int fd, int blocking) {
     return 0;
 }
 
+/*
+ * Appends a suffix to a filename just before the last dot (extension).
+ * If no extension is found, it appends the suffix at the end.
+ * The caller is responsible for freeing the allocated string.
+ */
+char* append_before_extension(const char* filename, const char* suffix) {
+    if (!filename || !suffix) return NULL;
+
+    size_t len_f = strlen(filename);
+    size_t len_s = strlen(suffix);
+    char* result = (char*)malloc(len_f + len_s + 1);
+
+    if (!result) return NULL;
+
+    // Find the last occurrence of '.'
+    const char* dot = strrchr(filename, '.');
+
+    if (!dot) {
+        // No extension found
+        sprintf(result, "%s%s", filename, suffix);
+    } else {
+        // Extension found
+        size_t base_len = dot - filename;
+        strncpy(result, filename, base_len);
+        result[base_len] = '\0'; // strncpy does not null-terminate if not reaching the end
+        strcat(result, suffix);
+        strcat(result, dot);
+    }
+
+    return result;
+}
+
 static void libfabric_shutdown(struct ng_options *global_opts) {
     // TODO: Implement libfabric shutdown
+
+    char* node_no = (char*)malloc(20);
+    sprintf(node_no, "%zu", module_data.my_node_id);
+    char* out_file_with_node_no = append_before_extension(cycles_output_file, node_no);
+
+    papi_simple_print_and_clear(out_file_with_node_no);
+
+    free(node_no);
+    free(out_file_with_node_no);
+
     return;
 }
 
@@ -720,7 +788,9 @@ static int libfabric_isendto(int dst, void *buffer, int size, NG_Request *req) {
             // Get the memory region descriptor
             // void *desc = libfabric_get_memory_region_info(buffer)->desc;
 
-            RETRY_ON_EAGAIN(fi_send(
+            RETRY_ON_EAGAIN((
+                papi_simple_start(),
+                fi_send(
                 module_data.peer_connections[dst].ep,
                 // buffer,
                 module_data.local_buffer,
@@ -729,7 +799,11 @@ static int libfabric_isendto(int dst, void *buffer, int size, NG_Request *req) {
                 module_data.local_descriptor,
                 FI_ADDR_UNSPEC,
                 handle // context
-            ));
+            )));
+
+            // 'S' tag for send.
+            papi_simple_stop_and_save('S');
+
             break;
         }
         case 'r': // RDMA read
@@ -799,7 +873,9 @@ static int libfabric_irecvfrom(int src, void *buffer, int size, NG_Request *req)
             VERBOSE_LOG("size=%d\n", size);
             // VERBOSE_LOG("desc=%p\n", desc);
             VERBOSE_LOG("handle=%p\n", handle);
-            FI_CHECK(fi_recv(
+            FI_CHECK((
+                papi_simple_start(),
+                fi_recv(
                 ep,
                 // buffer,
                 module_data.local_buffer,
@@ -808,7 +884,10 @@ static int libfabric_irecvfrom(int src, void *buffer, int size, NG_Request *req)
                 module_data.local_descriptor,
                 FI_ADDR_UNSPEC,
                 handle
-            ));
+            )));
+
+            // 'R' tag for receive.
+            papi_simple_stop_and_save('R');
 
             // wait_for_completion(module_data.peer_connections[src].cq);
             break;
